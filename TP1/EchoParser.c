@@ -32,18 +32,19 @@ int echoParser(char * buffer, int * valread)
             }
             *(buffer + counter) = *(buffer + i);
             counter++;
-            *(buffer + counter + 1) == *(buffer + i + 1);
+            *(buffer + counter) == *(buffer + i + 1);
             counter++;
             limit = 0;
             i++;
         
         }
-        i++;
+        
         if(i == *valread)
         {
             *valread = counter;
             notFinished = 0;
         }
+        i++;
     }
 
     return isCorrect;
