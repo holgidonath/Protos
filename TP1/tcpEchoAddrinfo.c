@@ -11,6 +11,7 @@
 #include <sys/time.h> 
 #include "logger.h"
 #include "tcpServerUtil.h"
+#include "EchoParser.c"
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -256,9 +257,11 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
+					int correct = echoParser(buffer,valread);
 
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
+
 					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
 					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
 					bufferWrite[i].len += valread;
