@@ -4,8 +4,8 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <string.h>
-#include "logger.h"
-#include "util.h"
+#include "./include/logger.h"
+#include "./include/util.h"
 
 #define MAXPENDING 5 // Maximum outstanding connection requests
 #define BUFSIZE 256
