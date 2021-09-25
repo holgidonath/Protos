@@ -3,35 +3,49 @@ int echoParser(char * buffer, int * valread)
 {   
     int i = 0;
     int counter = 0;
+    int limit= 0;
     int notFinished = 1;
     int isCorrect = 1;
     while (notFinished)
     {
 
-        if(isValid(*(buffer + i)) && counter <= 100)
+        if(isValid(*(buffer + i)) && limit <= 100)
         {
             *(buffer + counter) = *(buffer + i);
             counter++;
+            limit++;
+            if(*(buffer + i) == '/r' && *(buffer + i + 1) == '/n')
+            {   
+                *(buffer + counter) = *(buffer + i + 1);
+                counter++;
+                limit = 0;
+                i++;
+            }
+           
         }
         else 
         {
             isCorrect = 0;
-            *(buffer + counter) = '/r';
+            while (*(buffer + i) != '/r' && *(buffer + i + 1) != '/n' )
+            {
+                i++;
+            }
+            *(buffer + counter) = *(buffer + i);
             counter++;
-            *(buffer + counter) = '/n';
+            *(buffer + counter + 1) == *(buffer + i + 1);
             counter++;
+            limit = 0;
+            i++;
+        
+        }
+        i++;
+        if(i == *valread)
+        {
             *valread = counter;
             notFinished = 0;
         }
-
-        if( *(buffer + i) == '/r' && *(buffer + i + 1) == '/n')
-        {
-             *(buffer + counter + 1) == *(buffer + i + 1);
-             counter++;
-             *valread = counter;
-        }
-        i++;
     }
+
     return isCorrect;
 }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 

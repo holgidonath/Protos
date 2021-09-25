@@ -257,7 +257,7 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					int correct = echoParser(buffer,valread);
+					int correct = echoParser(buffer,&valread);
 
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
