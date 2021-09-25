@@ -8,7 +8,7 @@ int echoParser(char * buffer, int * valread)
     while (notFinished)
     {
 
-        if(isValid(buffer + i) && counter <= 100)
+        if(isValid(*(buffer + i)) && counter <= 100)
         {
             *(buffer + counter) = *(buffer + i);
             counter++;
