@@ -14,7 +14,7 @@ int echoParser(char * buffer, int * valread)
             *(buffer + counter) = *(buffer + i);
             counter++;
             limit++;
-            if(*(buffer + i) == '/r' && *(buffer + i + 1) == '/n')
+            if(*(buffer + i) == '\r' && *(buffer + i + 1) == '\n')
             {   
                 *(buffer + counter) = *(buffer + i + 1);
                 counter++;
@@ -26,7 +26,7 @@ int echoParser(char * buffer, int * valread)
         else 
         {
             isCorrect = 0;
-            while (*(buffer + i) != '/r' && *(buffer + i + 1) != '/n' )
+            while (*(buffer + i) != '\r' && *(buffer + i + 1) != '\n' )
             {
                 i++;
             }
