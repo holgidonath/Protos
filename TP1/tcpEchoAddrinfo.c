@@ -58,6 +58,8 @@ int main(int argc , char *argv[])
 	long valread;
 	int max_sd;
 	struct sockaddr_in address;
+	int wasValid[MAX_SOCKETS] = {1};
+	int limit[MAX_SOCKETS] = {0};
 
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
@@ -252,19 +254,23 @@ int main(int argc , char *argv[])
 					FD_CLR(sd, &writefds);
 					// Limpiamos el buffer asociado, para que no lo "herede" otra sesión
 					clear(bufferWrite + i);
+					wasValid[i] = 1;
+					limit[i] = 0;
 				}
 				else {
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					int correct = echoParser(buffer,&valread);
-
+					int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
+					
+            		
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
 
 					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
 					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
 					bufferWrite[i].len += valread;
+					
 				}
 			}
 		}

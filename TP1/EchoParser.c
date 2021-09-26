@@ -8,17 +8,17 @@ int isValid(char c)
     
 }
 
-int echoParser(char * buffer, long int * valread)
+int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit)
 {   
     int i = 0;
     long int counter = 0;
-    int limit= 0;
+    int limit= *prev_limit;
     int notFinished = 1;
     int isCorrect = 1;
     while (notFinished)
     {
 
-        if(isValid(*(buffer + i)) && limit <= 100)
+        if(isValid(*(buffer + i)) && limit <= 100 && *wasValid)
         {
             *(buffer + counter) = *(buffer + i);
             counter++;
@@ -38,6 +38,13 @@ int echoParser(char * buffer, long int * valread)
             while (*(buffer + i) != '\r' && *(buffer + i + 1) != '\n' )
             {
                 i++;
+                if(i == *valread)
+                {
+                    *valread = counter;
+                    *wasValid = 0;
+                    return isCorrect;
+
+                }
             }
             *(buffer + counter) = *(buffer + i);
             counter++;
@@ -51,6 +58,8 @@ int echoParser(char * buffer, long int * valread)
         if(i == *valread)
         {
             *valread = counter;
+            *wasValid = 1;
+            *prev_limit = limit;
             notFinished = 0;
         }
         
