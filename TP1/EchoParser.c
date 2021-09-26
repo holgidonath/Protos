@@ -1,8 +1,17 @@
+int isValid(char c)
+{
+    if (c == 'x')
+    {
+        return 0;
+    }
+    return 1;
+    
+}
 
-int echoParser(char * buffer, int * valread)
+int echoParser(char * buffer, long int * valread)
 {   
     int i = 0;
-    int counter = 0;
+    long int counter = 0;
     int limit= 0;
     int notFinished = 1;
     int isCorrect = 1;
@@ -32,30 +41,21 @@ int echoParser(char * buffer, int * valread)
             }
             *(buffer + counter) = *(buffer + i);
             counter++;
-            *(buffer + counter) == *(buffer + i + 1);
+            *(buffer + counter) = *(buffer + i + 1);
             counter++;
             limit = 0;
             i++;
         
         }
-        
+        i++;
         if(i == *valread)
         {
             *valread = counter;
             notFinished = 0;
         }
-        i++;
+        
     }
 
     return isCorrect;
 }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 
-int isValid(char c)
-{
-    if (c == 'x')
-    {
-        return 0;
-    }
-    return 1;
-    
-}
