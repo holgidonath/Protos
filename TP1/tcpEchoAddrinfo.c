@@ -11,7 +11,8 @@
 #include <sys/time.h> 
 #include "./include/logger.h"
 #include "./include/tcpServerUtil.h"
-#include "EchoParser.c"
+#include "include/echoParser.h"
+#include "include/commandParser.h"
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -60,6 +61,8 @@ int main(int argc , char *argv[])
 	struct sockaddr_in address;
 	int wasValid[MAX_SOCKETS] = {1};
 	int limit[MAX_SOCKETS] = {0};
+	int commandParsed[MAX_SOCKETS] = {BEGIN};
+	char *commands [] = {"echo", "get"};
 
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
@@ -261,9 +264,13 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
-					
-            		
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i]);
+					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
+					if(state == INVALID){
+						char * error_msg = "Invalid command!\r\n";
+						strcpy(buffer, error_msg);
+						valread = strlen(error_msg);
+					}
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
 

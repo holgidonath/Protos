@@ -1,3 +1,5 @@
+#include "include/commandParser.h"
+
 int isValid(char c)
 {
     if (c == 'x')
@@ -8,7 +10,7 @@ int isValid(char c)
     
 }
 
-int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit)
+int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed)
 {   
     int i = 0;
     long int counter = 0;
@@ -29,6 +31,9 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
                 counter++;
                 limit = 0;
                 i++;
+                *commandParsed = BEGIN;
+                
+                
             }
            
         }
@@ -42,6 +47,7 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
                 {
                     *valread = counter;
                     *wasValid = 0;
+                    *commandParsed = BEGIN;
                     return isCorrect;
 
                 }

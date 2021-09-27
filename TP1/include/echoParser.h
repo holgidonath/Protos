@@ -1,0 +1,1 @@
+int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed);
