@@ -3,13 +3,13 @@
 #include <string.h>
 #include "include/commandParser.h"
 #include "include/echoParser.h"
+#include "include/getParser.h"
 
 
 int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit){
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);
-    char test[] = "hola";
     
     while(state != FINISH && state != INVALID){
         switch (state)
@@ -70,9 +70,15 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
             }
             break;
         case GET:
-            if (c == ' '){
+            if (c == ' ' || *commandParsed == GET){
                 state = FINISH;
                 *commandParsed = GET;
+                strcpy(buffer, buffer + i + 1);
+				*valread -= (i+1);
+                int correct = getParser(buffer,valread, wasValid, limit, commandParsed);
+                if(!correct){
+                    state = INVALID;
+                }
             } else {
                 state = INVALID;
             }

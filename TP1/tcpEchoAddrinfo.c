@@ -13,6 +13,7 @@
 #include "./include/tcpServerUtil.h"
 #include "include/echoParser.h"
 #include "include/commandParser.h"
+#include "include/getParser.h"
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -63,6 +64,8 @@ int main(int argc , char *argv[])
 	int limit[MAX_SOCKETS] = {0};
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
 	char *commands [] = {"echo", "get"};
+
+	int locale = 'es';
 
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
@@ -266,7 +269,7 @@ int main(int argc , char *argv[])
 					FD_SET(sd, &writefds);
 					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i]);
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
-					if(state == INVALID){
+					if(state == INVALID || state == INVALID_GET){
 						char * error_msg = "Invalid command!\r\n";
 						strcpy(buffer, error_msg);
 						valread = strlen(error_msg);
@@ -277,6 +280,10 @@ int main(int argc , char *argv[])
 					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
 					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
 					bufferWrite[i].len += valread;
+					for(int x = 0; x < BUFFSIZE; x++){
+						buffer[x] = '\0';
+					}
+					
 					
 				}
 			}
