@@ -3,6 +3,7 @@
 #include <string.h>
 #include "include/commandParser.h"
 #include "include/echoParser.h"
+#include "include/getParser.h"
 
 
 int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit){
@@ -75,6 +76,9 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
                 strcpy(buffer, buffer + i + 1);
 				*valread -= (i+1);
                 int correct = getParser(buffer,valread, wasValid, limit, commandParsed);
+                if(!correct){
+                    state = INVALID;
+                }
             } else {
                 state = INVALID;
             }

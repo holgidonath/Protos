@@ -13,6 +13,7 @@
 #include "./include/tcpServerUtil.h"
 #include "include/echoParser.h"
 #include "include/commandParser.h"
+#include "include/getParser.h"
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -268,7 +269,7 @@ int main(int argc , char *argv[])
 					FD_SET(sd, &writefds);
 					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i]);
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
-					if(state == INVALID){
+					if(state == INVALID || state == INVALID_GET){
 						char * error_msg = "Invalid command!\r\n";
 						strcpy(buffer, error_msg);
 						valread = strlen(error_msg);
