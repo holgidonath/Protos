@@ -64,6 +64,8 @@ int main(int argc , char *argv[])
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
 	char *commands [] = {"echo", "get"};
 
+	int locale = 'es';
+
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
 
