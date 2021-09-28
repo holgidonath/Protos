@@ -277,6 +277,10 @@ int main(int argc , char *argv[])
 					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
 					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
 					bufferWrite[i].len += valread;
+					for(int x = 0; x < BUFFSIZE; x++){
+						buffer[x] = '\0';
+					}
+					
 					
 				}
 			}

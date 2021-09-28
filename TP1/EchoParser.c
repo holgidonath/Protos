@@ -40,32 +40,39 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
         else 
         {
             isCorrect = 0;
-            while (*(buffer + i) != '\r' && *(buffer + i + 1) != '\n' )
+            int j = i + 1;
+            while (*(buffer + i) != '\r' && *(buffer + j) != '\n' )
             {
-                i++;
-                if(i == *valread)
-                {
-                    *valread = counter;
-                    *wasValid = 0;
-                    *commandParsed = BEGIN;
-                    return isCorrect;
-
+                *(buffer + i) = *(buffer + (j++));
+                *(buffer + (j-1)) = '\0';
+                if(*(buffer + i) == '\r'){
+                    i++;
                 }
+                // if(i == *valread)
+                // {
+                //     *valread = counter;
+                //     *wasValid = 0;
+                //     *commandParsed = BEGIN;
+                //     return isCorrect;
+
+                // }
             }
-            *(buffer + counter) = *(buffer + i);
-            counter++;
-            *(buffer + counter) = *(buffer + i + 1);
-            counter++;
-            limit = 0;
-            i++;
-        
+            counter += 2;
+            *commandParsed = BEGIN;
+            // *(buffer + counter) = *(buffer + i);
+            // counter++;
+            // *(buffer + counter) = *(buffer + i + 1);
+            // counter++;
+            // limit = 0;
+            
+
         }
         i++;
         if(i == *valread)
         {
             *valread = counter;
-            *wasValid = 1;
-            *prev_limit = limit;
+            // *wasValid = 1;
+            // *prev_limit = limit;
             notFinished = 0;
         }
         
