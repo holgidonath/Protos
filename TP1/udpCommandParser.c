@@ -3,23 +3,19 @@
 #include <string.h>
 #include "include/udpCommandParser.h"
 
-int parseCommand(char * buffer){
+int udpParseCommand(char * buffer){
+    printf("entro\n");
+    printf("%s", buffer);
+    
     unsigned state = BEGIN;
     int i = 0;
     char c = tolower(buffer[0]);
-    int fromSet = 0;
-    int fromLocale = 0;
 
-    while(state != FINISH && state != INVALID){
+    while(state != FINISH && state != INVALID && state != STATS_OK && state != LOCALE_EN_OK && state != LOCALE_ES_OK){
         switch (state){
             case BEGIN:
                 if(c == 's'){
                     state = S;
-                } else if (c == 'l'){
-                    state = L;
-                } else if (c == 'e')
-                {
-                    state = E;
                 } else {
                     state = INVALID;
                 }
@@ -43,8 +39,14 @@ int parseCommand(char * buffer){
                 break;
             case SET:
                 if (c == ' '){
-                    fromSet = 1;
-                    state = BEGIN;
+                    state = SETSPACE;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case SETSPACE:
+            	if (c == 'l'){
+                    state = L;
                 } else {
                     state = INVALID;
                 }
@@ -86,8 +88,14 @@ int parseCommand(char * buffer){
                 break;
             case LOCALE:
                 if (c == ' '){
-                    fromLocale = 1;
-                    state = BEGIN;
+                    state = LOCALESPACE;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case LOCALESPACE:
+            	if (c == 'e'){
+                    state = E;
                 } else {
                     state = INVALID;
                 }
@@ -102,20 +110,12 @@ int parseCommand(char * buffer){
                 }
                 break;
             case EN:
-                if (c == '\r'){
-                    printf("pediste locale\n");
-                    state = RETURN;
-                } else {
-                    state = INVALID;
-                }
+                state = LOCALE_EN_OK;
+                printf("pediste locale\n");
                 break;
             case ES:
-                if (c == '\r'){
-                    printf("pediste locale\n");
-                    state = RETURN;
-                } else {
-                    state = INVALID;
-                }
+                state = LOCALE_ES_OK;
+                printf("pediste locale\n");
                 break;
             case ST:
                 if (c == 'a'){
@@ -139,12 +139,8 @@ int parseCommand(char * buffer){
                 }
                 break;
             case STATS:
-                if (c == 'r'){
-                    printf("pediste stats\n");
-                    state = RETURN;
-                } else {
-                    state = INVALID;
-                }
+                state = STATS_OK;
+                printf("pediste stats");
                 break;
             case RETURN:
                 if (c == 'n'){
@@ -153,7 +149,13 @@ int parseCommand(char * buffer){
                     state = INVALID;
                 }
             case FINISH:
-                break;   
+                break;
+            case STATS_OK:
+                break;
+            case LOCALE_ES_OK:
+                break;  
+            case LOCALE_EN_OK:
+                break;    
         }
         i++;
         c = tolower(buffer[i]);
@@ -161,16 +163,16 @@ int parseCommand(char * buffer){
     return state;
 }
 
-int main(int argc, char *argv[]) {
-    char buffer[100];
-    strcat(buffer, argv[1]);
-    for (int i = 2; i < argc; i++){
-        strcat(buffer," ");
-        printf("%s", argv[i]);
-        strcat(buffer,argv[i]);
-        printf("\n");
-    }
-    strcat(buffer,"\n");
-    printf("%s", buffer);
-    parseCommand(buffer);
-}
+// int main(int argc, char *argv[]) {
+//     char buffer[100];
+//     strcat(buffer, argv[1]);
+//     for (int i = 2; i < argc; i++){
+//         strcat(buffer," ");
+//         printf("%s", argv[i]);
+//         strcat(buffer,argv[i]);
+//         printf("\n");
+//     }
+//     strcat(buffer,"\n");
+//     printf("%s", buffer);
+//     parseCommand(buffer);
+// }

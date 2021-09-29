@@ -8,6 +8,7 @@ enum cmdState{
     LOCA,
     LOCAL,
     LOCALE,
+    LOCALESPACE,
     E,
     ES,
     EN,
@@ -18,9 +19,13 @@ enum cmdState{
     STATS,
     SE,
     SET,
+    SETSPACE,
     RETURN,
     FINISH,
-    INVALID
+    INVALID,
+    STATS_OK,
+    LOCALE_EN_OK,
+    LOCALE_ES_OK
 };
 
-int parseCommand(char * buffer);
+int udpParseCommand(char * buffer);
