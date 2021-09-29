@@ -6,7 +6,7 @@
 #include "include/getParser.h"
 
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit){
+int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, int locale){
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);
@@ -75,7 +75,7 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
                 *commandParsed = GET;
                 strcpy(buffer, buffer + i + 1);
 				*valread -= (i+1);
-                int correct = getParser(buffer,valread, wasValid, limit, commandParsed);
+                int correct = getParser(buffer,valread, wasValid, limit, commandParsed, locale);
                 if(!correct){
                     state = INVALID;
                 }

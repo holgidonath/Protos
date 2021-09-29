@@ -18,4 +18,4 @@ enum cmdState{
     INVALID
 };
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit);
+int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, int locale);
