@@ -53,6 +53,7 @@ void handleAddrInfo(int socket);
 
 int main(int argc , char *argv[])
 {
+	printf("hola :)\n");
 	int opt = TRUE;
 	int master_socket[2];  // IPv4 e IPv6 (si estan habilitados)
 	int master_socket_size=0;
@@ -371,14 +372,14 @@ void handleAddrInfo(int socket) {
 	buffer[n] = '\0';
 	log(DEBUG, "UDP received:%s", buffer );
 	// TODO: parsear lo recibido para obtener nombre, puerto, etc. Asumimos viene solo el nombre
-
-	// Especificamos solo SOCK_STREAM para que no duplique las respuestas
-	struct addrinfo addrCriteria;                   // Criteria for address match
-	memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
-	addrCriteria.ai_family = AF_UNSPEC;             // Any address family
-	addrCriteria.ai_socktype = SOCK_STREAM;         // Only stream sockets
-	addrCriteria.ai_protocol = IPPROTO_TCP;         // Only TCP protocol
-
+	printf("%s", buffer);
+	int res = udpParseCommand(buffer);
+	// // Especificamos solo SOCK_STREAM para que no duplique las respuestas
+	// struct addrinfo addrCriteria;                   // Criteria for address match
+	// memset(&addrCriteria, 0, sizeof(addrCriteria)); // Zero out structure
+	// addrCriteria.ai_family = AF_UNSPEC;             // Any address family
+	// addrCriteria.ai_socktype = SOCK_STREAM;         // Only stream sockets
+	// addrCriteria.ai_protocol = IPPROTO_TCP;         // Only TCP protocol
 
 	// Armamos el datagrama con las direcciones de respuesta, separadas por \r\n
 	// TODO: hacer una concatenacion segura
@@ -387,41 +388,50 @@ void handleAddrInfo(int socket) {
 	char bufferOut[BUFFSIZE];
 	bufferOut[0] = '\0';
 
-	struct addrinfo *addrList;
-	int rtnVal = getaddrinfo(buffer, NULL, &addrCriteria, &addrList);
-	if (rtnVal != 0) {
-		log(ERROR, "getaddrinfo() failed: %d: %s", rtnVal, gai_strerror(rtnVal));
-		strcat(strcpy(bufferOut,"Can't resolve "), buffer);
-
-	} else {
-		for (struct addrinfo *addr = addrList; addr != NULL; addr = addr->ai_next) {
-			struct sockaddr *address = addr->ai_addr;
-			char addrBuffer[INET6_ADDRSTRLEN];
-
-			void *numericAddress = NULL;
-			switch (address->sa_family) {
-				case AF_INET:
-					numericAddress = &((struct sockaddr_in *) address)->sin_addr;
-					break;
-				case AF_INET6:
-					numericAddress = &((struct sockaddr_in6 *) address)->sin6_addr;
-					break;
-			}
-			if ( numericAddress == NULL) {
-				strcat(bufferOut, "[Unknown Type]");
-			} else {
-				// Convert binary to printable address
-				if (inet_ntop(address->sa_family, numericAddress, addrBuffer, sizeof(addrBuffer)) == NULL)
-					strcat(bufferOut, "[invalid address]");
-				else {
-					strcat(bufferOut, addrBuffer);
-				}
-			}
-			strcat(bufferOut, "\r\n");
-		}
-		freeaddrinfo(addrList);
+	if (res == 20){
+		strcpy(bufferOut, "Stats for the server");
+	} else if (res == 21){
+		strcpy(bufferOut, "locale was set for english");
+	} else if (res == 22){
+		strcpy(bufferOut, "locale was set for spanish");
 	}
+	
+	//strcat(strcpy(bufferOut, "probando el echo "), buffer);
+	strcat(bufferOut, "\r\n");
+	// struct addrinfo *addrList;
+	// int rtnVal = getaddrinfo(buffer, NULL, &addrCriteria, &addrList);
+	// if (rtnVal != 0) {
+	// 	log(ERROR, "getaddrinfo() failed: %d: %s", rtnVal, gai_strerror(rtnVal));
+	// 	strcat(strcpy(bufferOut,"Can't resolve "), buffer);
 
+	// } else {
+	// 	for (struct addrinfo *addr = addrList; addr != NULL; addr = addr->ai_next) {
+	// 		struct sockaddr *address = addr->ai_addr;
+	// 		char addrBuffer[INET6_ADDRSTRLEN];
+
+	// 		void *numericAddress = NULL;
+	// 		switch (address->sa_family) {
+	// 			case AF_INET:
+	// 				numericAddress = &((struct sockaddr_in *) address)->sin_addr;
+	// 				break;
+	// 			case AF_INET6:
+	// 				numericAddress = &((struct sockaddr_in6 *) address)->sin6_addr;
+	// 				break;
+	// 		}
+	// 		if ( numericAddress == NULL) {
+	// 			strcat(bufferOut, "[Unknown Type]");
+	// 		} else {
+	// 			// Convert binary to printable address
+	// 			if (inet_ntop(address->sa_family, numericAddress, addrBuffer, sizeof(addrBuffer)) == NULL)
+	// 				strcat(bufferOut, "[invalid address]");
+	// 			else {
+	// 				strcat(bufferOut, addrBuffer);
+	// 			}
+	// 		}
+	// 		strcat(bufferOut, "\r\n");
+	// 	}
+	// 	freeaddrinfo(addrList);
+	// }
 	// Enviamos respuesta (el sendto no bloquea)
 	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *) &clntAddr, len);
 

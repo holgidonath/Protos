@@ -20,7 +20,10 @@ enum cmdState{
     SET,
     RETURN,
     FINISH,
-    INVALID
+    INVALID,
+    STATS_OK,
+    LOCALE_EN_OK,
+    LOCALE_ES_OK
 };
 
-int parseCommand(char * buffer);
+int udpParseCommand(char * buffer);
