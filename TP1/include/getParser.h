@@ -1,3 +1,4 @@
+
 enum getState{
     BEGIN_GET,
     D,
@@ -15,4 +16,4 @@ enum getState{
     INVALID_CRLF
 };
 
-int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed);
+int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf);

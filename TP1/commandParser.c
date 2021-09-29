@@ -6,7 +6,7 @@
 #include "include/getParser.h"
 
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit){
+int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, struct buffer * buf){
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);
@@ -48,9 +48,9 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
             if (c == ' ' || *commandParsed == ECHO){
                 state = FINISH;
                 *commandParsed = ECHO;
-                strcpy(buffer, buffer + i + 1);
-				*valread -= (i+1);
-                int correct = echoParser(buffer,valread, wasValid, limit, commandParsed);
+                // strcpy(buffer, buffer + i + 1);
+				// *valread -= (i+1);
+                int correct = echoParser(buffer + i + 1,valread, wasValid, limit, commandParsed, buf);
             } else {
                 state = INVALID;
             }
@@ -73,9 +73,9 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
             if (c == ' ' || *commandParsed == GET){
                 state = FINISH;
                 *commandParsed = GET;
-                strcpy(buffer, buffer + i + 1);
-				*valread -= (i+1);
-                int correct = getParser(buffer,valread, wasValid, limit, commandParsed);
+                // strcpy(buffer, buffer + i + 1);
+				// *valread -= (i+1);
+                int correct = getParser(buffer+i+1,valread, wasValid, limit, commandParsed, buf);
                 if(!correct){
                     state = INVALID;
                 }
