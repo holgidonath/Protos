@@ -43,7 +43,7 @@ int udpSocket(int port);
 /**
   Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
   */
-void handleAddrInfo(int socket);
+void handleAddrInfo(int socket, int *locale);
 
 
 int main(int argc , char *argv[])
@@ -61,7 +61,7 @@ int main(int argc , char *argv[])
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
 	char *commands [] = {"echo", "get"};
 
-	int locale = 'es';
+	int locale = 'en';
 
 	struct sockaddr_storage clntAddr; // Client address
 	socklen_t clntAddrLen = sizeof(clntAddr);
@@ -199,7 +199,7 @@ int main(int argc , char *argv[])
 
 		// Servicio UDP
 		if(FD_ISSET(udpSock, &readfds)) {
-			handleAddrInfo(udpSock);
+			handleAddrInfo(udpSock, &locale);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -263,7 +263,7 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i]);
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], locale);
 					// valread = bufferWrite[i].len ;
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
 
@@ -351,7 +351,7 @@ int udpSocket(int port) {
 }
 
 
-void handleAddrInfo(int socket) {
+void handleAddrInfo(int socket, int *locale) {
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
@@ -388,8 +388,10 @@ void handleAddrInfo(int socket) {
 	} else if (res == 22){
 		strcpy(bufferOut, "Stats for the server");
 	} else if (res == 23){
+		*locale = 'en';
 		strcpy(bufferOut, "locale was set for english");
 	} else if (res == 24){
+		*locale = 'es';
 		strcpy(bufferOut, "locale was set for spanish");
 	}
 	
