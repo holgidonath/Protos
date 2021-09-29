@@ -21,15 +21,10 @@
 #define FALSE  0
 #define PORT 8888
 #define MAX_SOCKETS 30
-#define BUFFSIZE 1024
+
 #define PORT_UDP 8888
 #define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
 
-struct buffer {
-	char * buffer;
-	size_t len;     // longitud del buffer
-	size_t from;    // desde donde falta escribir
-};
 
 /**
   Se encarga de escribir la respuesta faltante en forma no bloqueante
@@ -268,22 +263,22 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], locale);
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], locale);
+					// valread = bufferWrite[i].len ;
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
+
 					if(state == INVALID || state == INVALID_GET){
 						char * error_msg = "Invalid command!\r\n";
-						strcpy(buffer, error_msg);
 						valread = strlen(error_msg);
+						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
+						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, error_msg, valread);
+						bufferWrite[i].len += valread;
 					}
+					
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
 
-					bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
-					memcpy(bufferWrite[i].buffer + bufferWrite[i].len, buffer, valread);
-					bufferWrite[i].len += valread;
-					for(int x = 0; x < BUFFSIZE; x++){
-						buffer[x] = '\0';
-					}
+					
 					
 					
 				}

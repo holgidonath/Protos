@@ -1,11 +1,13 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
+#include "include/commandParser.h"
 #include "include/getParser.h"
 
 #define BUF_LEN 1024
 
-int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, int locale){
+int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int locale){
+
     long int counter = 0;
     int limit= *prev_limit;
     int notFinished = 1;
@@ -101,24 +103,27 @@ int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limi
             break;
         }
         c = tolower(buffer[++i]);
-        buffer[i-1] = '\0';
     }
     *commandParsed = BEGIN_GET;
     if(state == FINISH_GET){
         time_t rawtime = time(NULL);
         struct tm *ptm = localtime(&rawtime);
-        char buf [BUF_LEN] = {0};
+        char buff [BUF_LEN] = {0};
         if(cmd == DATE && state == FINISH_GET){
         	if(locale == 'es'){
-            		strftime(buf, BUF_LEN, "%d/%m/%Y\r\n", ptm);
+            		strftime(buff, BUF_LEN, "%d/%m/%Y\r\n", ptm);
             	} else{
-            		strftime(buf, BUF_LEN, "%m/%d/%Y\r\n", ptm);
+            		strftime(buff, BUF_LEN, "%m/%d/%Y\r\n", ptm);
             	}
         } else if (cmd == TIME && state == FINISH_GET){
-            strftime(buf, BUF_LEN, "%T\r\n", ptm);
+            strftime(buff, BUF_LEN, "%T\r\n", ptm);
         }
-        strcpy(buffer, buf);
-        *valread = strlen(buf);
+        counter = strlen(buff);
+        buf->buffer = realloc(buf->buffer, buf->len + counter);
+        memcpy(buf->buffer + buf->len, buff, counter);
+        buf->len += counter;
+        // strcpy(buffer, buf);
+        // *valread = strlen(buff);
     } else if (state == INVALID_CRLF || state == INVALID_GET){
         isCorrect = 0;
     }

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "buffer.h"
 
 enum cmdType{
     ECHO_CMD,
@@ -18,4 +19,4 @@ enum cmdState{
     INVALID
 };
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, int locale);
+int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, struct buffer * buf, int locale);
