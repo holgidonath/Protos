@@ -50,7 +50,7 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
             // counter++;
             // *(buffer + counter) = *(buffer + i + 1);
             // counter++;
-            // limit = 0;
+            limit = 0;
             // i++;
             *wasValid = 1;
             notFinished = 0;
