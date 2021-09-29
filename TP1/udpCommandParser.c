@@ -10,19 +10,12 @@ int udpParseCommand(char * buffer){
     unsigned state = BEGIN;
     int i = 0;
     char c = tolower(buffer[0]);
-    int fromSet = 0;
-    int fromLocale = 0;
 
     while(state != FINISH && state != INVALID && state != STATS_OK && state != LOCALE_EN_OK && state != LOCALE_ES_OK){
         switch (state){
             case BEGIN:
                 if(c == 's'){
                     state = S;
-                } else if (c == 'l'){
-                    state = L;
-                } else if (c == 'e')
-                {
-                    state = E;
                 } else {
                     state = INVALID;
                 }
@@ -46,8 +39,14 @@ int udpParseCommand(char * buffer){
                 break;
             case SET:
                 if (c == ' '){
-                    fromSet = 1;
-                    state = BEGIN;
+                    state = SETSPACE;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case SETSPACE:
+            	if (c == 'l'){
+                    state = L;
                 } else {
                     state = INVALID;
                 }
@@ -89,8 +88,14 @@ int udpParseCommand(char * buffer){
                 break;
             case LOCALE:
                 if (c == ' '){
-                    fromLocale = 1;
-                    state = BEGIN;
+                    state = LOCALESPACE;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case LOCALESPACE:
+            	if (c == 'e'){
+                    state = E;
                 } else {
                     state = INVALID;
                 }

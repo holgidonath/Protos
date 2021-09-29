@@ -388,11 +388,13 @@ void handleAddrInfo(int socket) {
 	char bufferOut[BUFFSIZE];
 	bufferOut[0] = '\0';
 
-	if (res == 20){
-		strcpy(bufferOut, "Stats for the server");
-	} else if (res == 21){
-		strcpy(bufferOut, "locale was set for english");
+	if (res == 21){
+		strcpy(bufferOut, "Invalid command!");
 	} else if (res == 22){
+		strcpy(bufferOut, "Stats for the server");
+	} else if (res == 23){
+		strcpy(bufferOut, "locale was set for english");
+	} else if (res == 24){
 		strcpy(bufferOut, "locale was set for spanish");
 	}
 	
