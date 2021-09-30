@@ -4,8 +4,6 @@
 #include "include/udpCommandParser.h"
 
 int udpParseCommand(char * buffer){
-    printf("entro\n");
-    printf("%s", buffer);
     
     unsigned state = BEGIN;
     int i = 0;

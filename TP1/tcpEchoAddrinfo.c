@@ -44,7 +44,7 @@ int udpSocket(int port);
 /**
   Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
   */
-void handleAddrInfo(int socket, int *locale);
+int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty);
 
 int parsePort(char * str){
 	int port = atoi(str);
@@ -76,6 +76,10 @@ int main(int argc , char *argv[])
 	int addrlen , new_socket , client_socket[MAX_SOCKETS] , max_clients = MAX_SOCKETS , activity, i , sd;
 	long valread;
 	int max_sd;
+	int connections_qty = 0;
+	int incorrect_lines_qty = 0;
+	int incorrect_datagrams_qty = 0;
+	int correct_lines_qty = 0;
 	struct sockaddr_in address;
 	int wasValid[MAX_SOCKETS] = {1};
 	int limit[MAX_SOCKETS] = {0};
@@ -220,7 +224,9 @@ int main(int argc , char *argv[])
 
 		// Servicio UDP
 		if(FD_ISSET(udpSock, &readfds)) {
-			handleAddrInfo(udpSock, &locale);
+			printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+			incorrect_datagrams_qty += handleAddrInfo(udpSock, &locale, connections_qty, incorrect_lines_qty, incorrect_datagrams_qty, correct_lines_qty);
+			printf("%d\n",incorrect_datagrams_qty);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -233,7 +239,7 @@ int main(int argc , char *argv[])
 					log(ERROR, "Accept error on master socket %d", mSock);
 					continue;
 				}
-
+				connections_qty += 1;
 				// add new socket to array of sockets
 				for (i = 0; i < max_clients; i++) 
 				{
@@ -252,6 +258,7 @@ int main(int argc , char *argv[])
 			sd = client_socket[i];
 
 			if (FD_ISSET(sd, &writefds)) {
+				correct_lines_qty+=1;
 				handleWrite(sd, bufferWrite + i, &writefds);
 			}
 		}
@@ -289,6 +296,8 @@ int main(int argc , char *argv[])
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
 
 					if(state == INVALID || state == INVALID_GET){
+						incorrect_lines_qty += 1;
+						correct_lines_qty -= 1;
 						char * error_msg = "Invalid command!\r\n";
 						valread = strlen(error_msg);
 						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
@@ -375,13 +384,13 @@ int udpSocket(int port) {
 }
 
 
-void handleAddrInfo(int socket, int *locale) {
+int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty) {
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
 	char buffer[BUFFSIZE];
 	unsigned int len, n;
-
+	int incorrect_datagrams = 0;
 	struct sockaddr_in clntAddr;
 
 	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket    
@@ -406,17 +415,23 @@ void handleAddrInfo(int socket, int *locale) {
 	//       tanto si se quiere obtener solo la direccion o la direccion mas el puerto
 	char bufferOut[BUFFSIZE];
 	bufferOut[0] = '\0';
-
+	char bufferAux[BUFFSIZE];
+	char bufferAux2[BUFFSIZE];
 	if (res == 21){
 		strcpy(bufferOut, "Invalid command!");
+		incorrect_datagrams++;
 	} else if (res == 22){
-		strcpy(bufferOut, "Stats for the server");
+		strcpy(bufferOut, "Stats for the server:\n");
+		sprintf(bufferAux,"Connections: %d\nIncorrect lines: %d\nCorrect lines: %d\nIncorrect datagrams: %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+		strcat(bufferOut, bufferAux);
 	} else if (res == 23){
 		*locale = 'en';
 		strcpy(bufferOut, "locale was set for english");
 	} else if (res == 24){
 		*locale = 'es';
 		strcpy(bufferOut, "locale was set for spanish");
+	} else {
+		strcpy(bufferOut, "Invalid command!");
 	}
 	
 	//strcat(strcpy(bufferOut, "probando el echo "), buffer);
@@ -460,5 +475,6 @@ void handleAddrInfo(int socket, int *locale) {
 
 	log(DEBUG, "UDP sent:%s", bufferOut );
 
+	return incorrect_datagrams;
 }
 
