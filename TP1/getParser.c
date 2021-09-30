@@ -16,7 +16,7 @@ int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limi
     int i = 0;
     char c = tolower(buffer[0]);
     unsigned cmd = BEGIN_GET;
-    while(state != FINISH_GET && state != INVALID_GET){
+    while(state != FINISH_GET && state != INVALID_GET && state != INVALID_CRLF){
         switch (state)
         {
         case BEGIN_GET:
