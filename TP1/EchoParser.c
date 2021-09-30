@@ -1,8 +1,9 @@
 #include "include/commandParser.h"
+#include <ctype.h>
 
 int isValid(char c)
 {
-    if (c == 'x')
+    if (!isascii(c))
     {
         return 0;
     }

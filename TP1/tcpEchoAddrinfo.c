@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/time.h> 
+#include <ctype.h>
 #include "./include/logger.h"
 #include "./include/tcpServerUtil.h"
 #include "include/echoParser.h"
@@ -45,10 +46,30 @@ int udpSocket(int port);
   */
 void handleAddrInfo(int socket, int *locale);
 
+int parsePort(char * str){
+	int port = atoi(str);
+	if(port >= 1024 && port <= 65535){
+		return port;
+	} else {
+		log(ERROR, "Invalid port number, setting to default port");
+	}
+	return PORT;
+}
 
 int main(int argc , char *argv[])
 {
-	printf("hola :)\n");
+	// printf("hola :)\n");
+	int port;
+	if(argc == 1){
+		port = PORT;
+	} else if (argc == 2)
+	{
+		port = parsePort(argv[1]);
+	} else {
+		log(ERROR, "Invalid arguments! Try only with one argument");
+		return -1;
+	}
+	log(DEBUG, "Server running on port: %d", port);
 	int opt = TRUE;
 	int master_socket[2];  // IPv4 e IPv6 (si estan habilitados)
 	int master_socket_size=0;
@@ -98,7 +119,7 @@ int main(int argc , char *argv[])
 		//type of socket created
 		address.sin_family = AF_INET;
 		address.sin_addr.s_addr = INADDR_ANY;
-		address.sin_port = htons( PORT );
+		address.sin_port = htons( port );
 
 		// bind the socket to localhost port 8888
 		if (bind(master_socket[master_socket_size], (struct sockaddr *)&address, sizeof(address))<0) 
@@ -129,7 +150,7 @@ int main(int argc , char *argv[])
 		}
 		memset(&server6addr, 0, sizeof(server6addr));
 		server6addr.sin6_family = AF_INET6;
-		server6addr.sin6_port   = htons(PORT);
+		server6addr.sin6_port   = htons(port);
 		server6addr.sin6_addr   = in6addr_any;
 		if (bind(master_socket[master_socket_size], (struct sockaddr *)&server6addr,sizeof(server6addr)) < 0)
 		{
@@ -148,7 +169,7 @@ int main(int argc , char *argv[])
 	}
 
 	// Socket UDP para responder en base a addrInfo
-	int udpSock = udpSocket(PORT);
+	int udpSock = udpSocket(port);
 	if ( udpSock < 0) {
 		log(FATAL, "UDP socket failed");
 		// exit(EXIT_FAILURE);
