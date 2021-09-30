@@ -108,20 +108,24 @@ int udpParseCommand(char * buffer){
                 }
                 break;
             case EN:
-            	if(c == '\r'){
-                	state = LOCALE_EN_OK;
-                	printf("pediste locale\n");
-                } else {
-                	state = INVALID;
-                }
+                state = LOCALE_EN_OK;
+                printf("pediste locale\n"); 
+            	// if(c == '\r'){
+                // 	state = LOCALE_EN_OK;
+                // 	printf("pediste locale\n");
+                // } else {
+                // 	state = INVALID;
+                // }
                 break;
             case ES:
-            	if(c == '\r'){
-                	state = LOCALE_ES_OK;
-                	printf("pediste locale\n");
-                } else {
-                	state = INVALID;
-                }
+                state = LOCALE_ES_OK;
+                printf("pediste locale\n");
+            	// if(c == '\r'){
+                // 	state = LOCALE_ES_OK;
+                // 	printf("pediste locale\n");
+                // } else {
+                // 	state = INVALID;
+                // }
                 break;
             case ST:
                 if (c == 'a'){
@@ -145,12 +149,14 @@ int udpParseCommand(char * buffer){
                 }
                 break;
             case STATS:
-            	if(c == '\r'){
-                	state = STATS_OK;
-                	printf("pediste stats");
-                } else {
-                    state = INVALID;
-                }
+                printf("pediste stats");
+                state = STATS_OK;
+            	// if(c == '\r'){
+                // 	state = STATS_OK;
+                // 	printf("pediste stats");
+                // } else {
+                //     state = INVALID;
+                // }
                 break;
             case RETURN:
                 if (c == 'n'){
@@ -169,6 +175,7 @@ int udpParseCommand(char * buffer){
         }
         i++;
         c = tolower(buffer[i]);
+        printf("%c", c);
     }
     return state;
 }
