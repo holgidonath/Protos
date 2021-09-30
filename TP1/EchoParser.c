@@ -17,6 +17,7 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
     int limit= *prev_limit;
     int notFinished = 1;
     char auxbuf[BUFFSIZE+1] = {0};
+    int flag = 0;
     while (notFinished)
     {
         
@@ -39,20 +40,31 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
         }
         else 
         {
+            if(*wasValid){
+                auxbuf[counter++] = '\r';
+                auxbuf[counter++] = '\n';
+            }
             while (*(buffer + i) != '\r' && *(buffer + i + 1) != '\n' )
             {
                 i++;
+                if (i+5 >= BUFFSIZE){
+                    *wasValid = 0;
+                    flag = 1;
+                    break;
+                }
             }
-            auxbuf[counter++] = *(buffer+i);
-            auxbuf[counter++] = *(buffer + i + 1);
+            if(flag != 1){
+                *wasValid = 1;
+            }
+            
             *commandParsed = BEGIN;
             // *(buffer + counter) = *(buffer + i);
             // counter++;
             // *(buffer + counter) = *(buffer + i + 1);
             // counter++;
-            limit = 0;
             // i++;
-            *wasValid = 1;
+            limit = 0;
+            // *wasValid = 1;
             notFinished = 0;
            
         }

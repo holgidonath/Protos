@@ -10,6 +10,11 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);
+
+    if(*wasValid == 0){
+        echoParser(buffer,valread,wasValid,limit,commandParsed,buf);
+        return state;
+    }
     
     while(state != FINISH && state != INVALID){
         switch (state)

@@ -19,10 +19,10 @@
 
 #define TRUE   1
 #define FALSE  0
-#define PORT 8888
+#define PORT 9999
 #define MAX_SOCKETS 30
 
-#define PORT_UDP 8888
+#define PORT_UDP 9999
 #define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
 
 
@@ -322,6 +322,9 @@ void handleWrite(int socket, struct buffer * buffer, fd_set * writefds) {
 				buffer->from += bytesSent;
 			}
 		}
+	} else {
+		clear(buffer);
+		FD_CLR(socket, writefds);
 	}
 }
 
