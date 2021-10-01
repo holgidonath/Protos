@@ -1,7 +1,7 @@
 #include <stdint.h>
 
-enum cmdState{
-    BEGIN,
+enum udpCmdState{
+    UDP_BEGIN,
     L,
     LO,
     LOC,
@@ -9,7 +9,7 @@ enum cmdState{
     LOCAL,
     LOCALE,
     LOCALESPACE,
-    E,
+    UDP_E,
     ES,
     EN,
     S,
@@ -21,8 +21,8 @@ enum cmdState{
     SET,
     SETSPACE,
     RETURN,
-    FINISH,
-    INVALID,
+    UDP_FINISH,
+    UDP_INVALID,
     STATS_OK,
     LOCALE_EN_OK,
     LOCALE_ES_OK

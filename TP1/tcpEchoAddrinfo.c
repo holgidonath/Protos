@@ -15,6 +15,7 @@
 #include "include/echoParser.h"
 #include "include/commandParser.h"
 #include "include/getParser.h"
+#include "include/udpCommandParser.h"
 
 #define max(n1,n2)     ((n1)>(n2) ? (n1) : (n2))
 
@@ -84,12 +85,11 @@ int main(int argc , char *argv[])
 	int wasValid[MAX_SOCKETS] = {1};
 	int limit[MAX_SOCKETS] = {0};
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
-	char *commands [] = {"echo", "get"};
 
 	int locale = 'en';
 
-	struct sockaddr_storage clntAddr; // Client address
-	socklen_t clntAddrLen = sizeof(clntAddr);
+	//struct sockaddr_storage clntAddr; // Client address
+	//socklen_t clntAddrLen = sizeof(clntAddr);
 
 	char buffer[BUFFSIZE + 1];  //data buffer of 1K
 
@@ -416,7 +416,6 @@ int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_l
 	char bufferOut[BUFFSIZE];
 	bufferOut[0] = '\0';
 	char bufferAux[BUFFSIZE];
-	char bufferAux2[BUFFSIZE];
 	if (res == 21){
 		strcpy(bufferOut, "Invalid command!");
 		incorrect_datagrams++;

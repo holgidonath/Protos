@@ -55,7 +55,7 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
                 *commandParsed = ECHO;
                 // strcpy(buffer, buffer + i + 1);
 				// *valread -= (i+1);
-                int correct = echoParser(buffer + i + 1,valread, wasValid, limit, commandParsed, buf);
+                echoParser(buffer + i + 1,valread, wasValid, limit, commandParsed, buf);
             } else {
                 state = INVALID;
             }

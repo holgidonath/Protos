@@ -1,5 +1,6 @@
 #include "include/commandParser.h"
 #include <ctype.h>
+#include <string.h>
 
 int isValid(char c)
 {

@@ -5,17 +5,17 @@
 
 int udpParseCommand(char * buffer){
     
-    unsigned state = BEGIN;
+    unsigned state = UDP_BEGIN;
     int i = 0;
     char c = tolower(buffer[0]);
 
-    while(state != FINISH && state != INVALID && state != STATS_OK && state != LOCALE_EN_OK && state != LOCALE_ES_OK){
+    while(state != UDP_FINISH && state != UDP_INVALID && state != STATS_OK && state != LOCALE_EN_OK && state != LOCALE_ES_OK){
         switch (state){
-            case BEGIN:
+            case UDP_BEGIN:
                 if(c == 's'){
                     state = S;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case S:
@@ -25,86 +25,86 @@ int udpParseCommand(char * buffer){
                 }else if (c == 't'){
                     state = ST;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case SE:
                 if (c == 't'){
                     state = SET;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case SET:
                 if (c == ' '){
                     state = SETSPACE;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case SETSPACE:
             	if (c == 'l'){
                     state = L;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case L:
                 if (c == 'o'){
                     state = LO;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LO:
                 if (c == 'c'){
                     state = LOC;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LOC:
                 if (c == 'a'){
                     state = LOCA;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LOCA:
                 if (c == 'l'){
                     state = LOCAL;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LOCAL:
                 if (c == 'e'){
                     state = LOCALE;
                 } else { 
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LOCALE:
                 if (c == ' '){
                     state = LOCALESPACE;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case LOCALESPACE:
             	if (c == 'e'){
-                    state = E;
+                    state = UDP_E;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
-            case E:
+            case UDP_E:
                 if (c == 'n'){
                     state = EN;
                 } else if (c == 's'){
                     state = ES;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case EN:
@@ -131,21 +131,21 @@ int udpParseCommand(char * buffer){
                 if (c == 'a'){
                     state = STA;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case STA:
                 if (c == 't'){
                     state = STAT;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case STAT:
                 if (c == 's'){
                     state = STATS;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
                 break;
             case STATS:
@@ -160,11 +160,11 @@ int udpParseCommand(char * buffer){
                 break;
             case RETURN:
                 if (c == 'n'){
-                    state = FINISH;
+                    state = UDP_FINISH;
                 } else {
-                    state = INVALID;
+                    state = UDP_INVALID;
                 }
-            case FINISH:
+            case UDP_FINISH:
                 break;
             case STATS_OK:
                 break;

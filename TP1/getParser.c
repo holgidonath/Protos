@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
 #include "include/commandParser.h"
 #include "include/getParser.h"
 
@@ -9,8 +10,8 @@
 int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int locale){
 
     long int counter = 0;
-    int limit= *prev_limit;
-    int notFinished = 1;
+    //int limit= *prev_limit;
+    //int notFinished = 1;
     int isCorrect = 1;
     unsigned state = BEGIN_GET;
     int i = 0;
