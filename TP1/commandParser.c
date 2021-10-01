@@ -6,7 +6,7 @@
 #include "include/getParser.h"
 
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, struct buffer * buf, char *locale, int * correct_lines, int * incorrect_lines){
+int parseCommand(char * buffer, int * commandParsed, long * valread, int * wasValid, int * limit, struct buffer * buf, char *locale, int * correct_lines, int * incorrect_lines){
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);

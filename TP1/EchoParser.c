@@ -12,7 +12,7 @@ int isValid(char c)
     
 }
 
-int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int * correct_lines, int * incorrect_lines )
+int echoParser(char * buffer, long * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int * correct_lines, int * incorrect_lines )
 {   
     int i = 0;
     long int counter = 0;
