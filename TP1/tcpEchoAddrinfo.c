@@ -304,8 +304,13 @@ int main(int argc , char *argv[])
 						char * error_msg = "Invalid command!\r\n";
 						valread = strlen(error_msg);
 						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
-						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, error_msg, valread);
-						bufferWrite[i].len += valread;
+						if(bufferWrite[i].buffer == NULL){
+							log(ERROR, "Realloc failed on socket %d\n", sd);
+						} else {
+							memcpy(bufferWrite[i].buffer + bufferWrite[i].len, error_msg, valread);
+							bufferWrite[i].len += valread;
+						}
+						
 					}
 					
 					// Tal vez ya habia datos en el buffer
