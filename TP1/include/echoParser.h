@@ -1,1 +1,1 @@
-int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf);
+int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf,  int * correct_lines, int * incorrect_lines);

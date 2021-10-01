@@ -12,7 +12,7 @@ int isValid(char c)
     
 }
 
-int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf )
+int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int * correct_lines, int * incorrect_lines )
 {   
     int i = 0;
     long int counter = 0;
@@ -35,6 +35,7 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
                 *commandParsed = BEGIN;
                 notFinished = 0;
                 *wasValid = 1;
+                *correct_lines += 1;
                 
             }
             
@@ -57,6 +58,7 @@ int echoParser(char * buffer, long int * valread, int * wasValid, int * prev_lim
             }
             if(flag != 1){
                 *wasValid = 1;
+                *incorrect_lines += 1;
             }
             
             *commandParsed = BEGIN;

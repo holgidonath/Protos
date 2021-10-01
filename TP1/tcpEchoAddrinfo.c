@@ -25,7 +25,7 @@
 #define MAX_SOCKETS 30
 
 #define PORT_UDP 9999
-#define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
+#define MAX_PENDING_CONNECTIONS 30    // un valor bajo, para realizar pruebas
 
 
 /**
@@ -259,7 +259,7 @@ int main(int argc , char *argv[])
 			sd = client_socket[i];
 
 			if (FD_ISSET(sd, &writefds)) {
-				correct_lines_qty+=1;
+				// correct_lines_qty+=1;
 				handleWrite(sd, bufferWrite + i, &writefds);
 			}
 		}
@@ -292,13 +292,13 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], &locale);
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], &locale, &correct_lines_qty, &incorrect_lines_qty);
 					// valread = bufferWrite[i].len ;
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
 
 					if(state == INVALID || state == INVALID_GET){
 						incorrect_lines_qty += 1;
-						correct_lines_qty -= 1;
+						// correct_lines_qty -= 1;
 						char * error_msg = "Invalid command!\r\n";
 						valread = strlen(error_msg);
 						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);

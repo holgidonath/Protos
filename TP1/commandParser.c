@@ -6,13 +6,13 @@
 #include "include/getParser.h"
 
 
-int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, struct buffer * buf, char *locale){
+int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasValid, int * limit, struct buffer * buf, char *locale, int * correct_lines, int * incorrect_lines){
     unsigned state = *commandParsed;
     int i = 0;
     char c = tolower(buffer[0]);
 
     if(*wasValid == 0){
-        echoParser(buffer,valread,wasValid,limit,commandParsed,buf);
+        echoParser(buffer,valread,wasValid,limit,commandParsed,buf, correct_lines, incorrect_lines);
         return state;
     }
     
@@ -55,7 +55,7 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
                 *commandParsed = ECHO;
                 // strcpy(buffer, buffer + i + 1);
 				// *valread -= (i+1);
-                echoParser(buffer + i + 1,valread, wasValid, limit, commandParsed, buf);
+                echoParser(buffer + i + 1,valread, wasValid, limit, commandParsed, buf, correct_lines, incorrect_lines);
             } else {
                 state = INVALID;
             }
@@ -84,6 +84,9 @@ int parseCommand(char * buffer, int * commandParsed, int * valread, int * wasVal
                 int correct = getParser(buffer+i+1,valread, wasValid, limit, commandParsed, buf, locale);
                 if(!correct){
                     state = INVALID;
+                    *incorrect_lines += 1;
+                }else{
+                    *correct_lines +=1;
                 }
             } else {
                 state = INVALID;
