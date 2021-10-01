@@ -310,7 +310,7 @@ int main(int argc , char *argv[])
 					
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
-
+					bzero(buffer, sizeof(buffer));
 					
 					
 					
