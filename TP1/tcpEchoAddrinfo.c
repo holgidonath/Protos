@@ -88,8 +88,8 @@ int main(int argc , char *argv[])
 
 	char locale[] = "en";
 
-	//struct sockaddr_storage clntAddr; // Client address
-	//socklen_t clntAddrLen = sizeof(clntAddr);
+	// struct sockaddr_storage clntAddr; // Client address
+	// socklen_t clntAddrLen = sizeof(clntAddr);
 
 	char buffer[BUFFSIZE + 1];  //data buffer of 1K
 
@@ -240,7 +240,9 @@ int main(int argc , char *argv[])
 					log(ERROR, "Accept error on master socket %d", mSock);
 					continue;
 				}
-				connections_qty += 1;
+				if(new_socket >= 0){
+					connections_qty += 1;
+				}
 				// add new socket to array of sockets
 				for (i = 0; i < max_clients; i++) 
 				{
@@ -389,11 +391,11 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
-	char buffer[BUFFSIZE];
+	char buffer[BUFFSIZE] = {0};
 	unsigned int len, n;
 	int incorrect_datagrams = 0;
 	struct sockaddr_in clntAddr;
-
+	len = sizeof(clntAddr);
 	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket    
 	n = recvfrom(socket, buffer, BUFFSIZE, 0, ( struct sockaddr *) &clntAddr, &len);
 	if ( buffer[n-1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
@@ -414,9 +416,8 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	// TODO: hacer una concatenacion segura
 	// TODO: modificar la funcion printAddressInfo usada en sockets bloqueantes para que sirva
 	//       tanto si se quiere obtener solo la direccion o la direccion mas el puerto
-	char bufferOut[BUFFSIZE];
-	bufferOut[0] = '\0';
-	char bufferAux[BUFFSIZE];
+	char bufferOut[BUFFSIZE] = {0};
+	char bufferAux[BUFFSIZE] = {0};
 	if (res == 21){
 		strcpy(bufferOut, "Invalid command!");
 		incorrect_datagrams++;
@@ -471,8 +472,9 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	// 	freeaddrinfo(addrList);
 	// }
 	// Enviamos respuesta (el sendto no bloquea)
-	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *) &clntAddr, len);
 
+	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *) &clntAddr, len);
+	// printf("\n data: %d \n", clntAddr.sin_addr);
 	log(DEBUG, "UDP sent:%s", bufferOut );
 
 	return incorrect_datagrams;
