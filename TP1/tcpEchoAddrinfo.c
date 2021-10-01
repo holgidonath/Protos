@@ -224,10 +224,10 @@ int main(int argc , char *argv[])
 
 		// Servicio UDP
 		if(FD_ISSET(udpSock, &readfds)) {
-			printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+			// printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
 			incorrect_datagrams_qty += handleAddrInfo(udpSock, &locale, connections_qty, incorrect_lines_qty, incorrect_datagrams_qty, correct_lines_qty);
-			printf("%d\n",incorrect_datagrams_qty);
-			printf("%s\n",locale);
+			// printf("%d\n",incorrect_datagrams_qty);
+			// printf("%s\n",locale);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -401,7 +401,7 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	buffer[n] = '\0';
 	log(DEBUG, "UDP received:%s", buffer );
 	// TODO: parsear lo recibido para obtener nombre, puerto, etc. Asumimos viene solo el nombre
-	printf("%s", buffer);
+	// printf("%s", buffer);
 	int res = udpParseCommand(buffer);
 	// // Especificamos solo SOCK_STREAM para que no duplique las respuestas
 	// struct addrinfo addrCriteria;                   // Criteria for address match
