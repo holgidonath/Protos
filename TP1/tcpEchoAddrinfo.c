@@ -45,7 +45,7 @@ int udpSocket(int port);
 /**
   Lee el datagrama del socket, obtiene info asociado con getaddrInfo y envia la respuesta
   */
-int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty);
+int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty);
 
 int parsePort(char * str){
 	int port = atoi(str);
@@ -86,7 +86,7 @@ int main(int argc , char *argv[])
 	int limit[MAX_SOCKETS] = {0};
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
 
-	int locale = 'en';
+	char locale[] = "en";
 
 	//struct sockaddr_storage clntAddr; // Client address
 	//socklen_t clntAddrLen = sizeof(clntAddr);
@@ -227,6 +227,7 @@ int main(int argc , char *argv[])
 			printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
 			incorrect_datagrams_qty += handleAddrInfo(udpSock, &locale, connections_qty, incorrect_lines_qty, incorrect_datagrams_qty, correct_lines_qty);
 			printf("%d\n",incorrect_datagrams_qty);
+			printf("%s\n",locale);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -291,7 +292,7 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], locale);
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], &locale);
 					// valread = bufferWrite[i].len ;
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
 
@@ -384,7 +385,7 @@ int udpSocket(int port) {
 }
 
 
-int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty) {
+int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty) {
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
@@ -424,10 +425,10 @@ int handleAddrInfo(int socket, int *locale, int connections_qty, int incorrect_l
 		sprintf(bufferAux,"Connections: %d\nIncorrect lines: %d\nCorrect lines: %d\nIncorrect datagrams: %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
 		strcat(bufferOut, bufferAux);
 	} else if (res == 23){
-		*locale = 'en';
+		strcpy(locale, "en");
 		strcpy(bufferOut, "locale was set for english");
 	} else if (res == 24){
-		*locale = 'es';
+		strcpy(locale, "es");
 		strcpy(bufferOut, "locale was set for spanish");
 	} else {
 		strcpy(bufferOut, "Invalid command!");

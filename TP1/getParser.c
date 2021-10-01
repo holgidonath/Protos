@@ -7,7 +7,7 @@
 
 #define BUF_LEN 1024
 
-int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int locale){
+int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, char *locale){
 
     long int counter = 0;
     //int limit= *prev_limit;
@@ -111,7 +111,8 @@ int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limi
         struct tm *ptm = localtime(&rawtime);
         char buff [BUF_LEN] = {0};
         if(cmd == DATE && state == FINISH_GET){
-        	if(locale == 'es'){
+            printf("aca esta en %s\n", locale);
+        	if(!strcmp(locale,"es")){
             		strftime(buff, BUF_LEN, "%d/%m/%Y\r\n", ptm);
             	} else{
             		strftime(buff, BUF_LEN, "%m/%d/%Y\r\n", ptm);

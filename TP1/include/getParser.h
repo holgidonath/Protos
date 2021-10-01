@@ -16,4 +16,4 @@ enum getState{
     INVALID_CRLF
 };
 
-int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, int locale);
+int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limit, int * commandParsed, struct buffer * buf, char *locale);
