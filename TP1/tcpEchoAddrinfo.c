@@ -57,6 +57,26 @@ int parsePort(char * str){
 	return PORT;
 }
 
+void int_to_string(char str[], int num){
+	int i, rem, len = 0, n;
+	n = num;
+	bzero(str, strlen(str));
+	while(n != 0){
+		len++;
+		n /= 10;
+	}
+	for(i = 0; i < len ; i++){
+		rem = num % 10;
+		num = num /10;
+		str[len - (i + 1)] = rem + '0';
+	}
+	if(len == 0){
+		str[0] = '0';
+		len++;
+	}
+	str[len] = '\0';
+}
+
 int main(int argc , char *argv[])
 {
 	// printf("hola :)\n");
@@ -422,14 +442,27 @@ int handleAddrInfo(int socket, char * locale, int connections_qty, int incorrect
 	// TODO: modificar la funcion printAddressInfo usada en sockets bloqueantes para que sirva
 	//       tanto si se quiere obtener solo la direccion o la direccion mas el puerto
 	char bufferOut[BUFFSIZE] = {0};
-	char bufferAux[BUFFSIZE] = {0};
+	// char bufferAux[BUFFSIZE] = {0};
 	if (res == 21){
 		strcpy(bufferOut, "Invalid command!");
 		incorrect_datagrams++;
 	} else if (res == 22){
-		strcpy(bufferOut, "Stats for the server:\n");
-		sprintf(bufferAux,"Connections: %d\nIncorrect lines: %d\nCorrect lines: %d\nIncorrect datagrams: %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
-		strcat(bufferOut, bufferAux);
+		strcpy(bufferOut, "Stats for the server:\r\n");
+		char temp_buff[10];
+		strcat(bufferOut, "Connections: ");
+		int_to_string(temp_buff, connections_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nIncorrect lines: ");
+		int_to_string(temp_buff, incorrect_lines_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nCorrect lines: ");
+		int_to_string(temp_buff, correct_lines_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nIncorrect datagrams: ");
+		int_to_string(temp_buff, incorrect_datagrams_qty);
+		strcat(bufferOut, temp_buff);
+		// sprintf(bufferAux,"Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nIncorrect datagrams: %d", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+		// strcat(bufferOut, bufferAux);
 	} else if (res == 23){
 		strcpy(locale, "en");
 		strcpy(bufferOut, "locale was set for english");
