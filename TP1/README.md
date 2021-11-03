@@ -23,3 +23,9 @@ Si no se especifica ningún puerto, por defecto corre sobre el puerto 9999.
 - `SET locale es` configura al servidor en modo español (la fecha se devuelve en dd/mm/yyyy)
 - `SET locale en` configura al servidor en modo inglés (la fecha se devuelve en mm/dd/yyyy)
 - `STATS` devuelve estadísticas sobre el servidor (cantidad de conexiones, líneas correctas, líneas incorrectas y datagramas incorrectos desde que se inició el servidor)
+
+### Integrantes:
+- Donath, Holger 58110
+- Fera, Rodrigo 58079
+- Lombardia, Maximiliano 56276
+- Monti, Florencia 55073

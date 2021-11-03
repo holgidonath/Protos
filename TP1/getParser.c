@@ -111,7 +111,6 @@ int getParser(char * buffer, long int * valread, int * wasValid, int * prev_limi
         struct tm *ptm = localtime(&rawtime);
         char buff [BUF_LEN] = {0};
         if(cmd == DATE && state == FINISH_GET){
-            printf("aca esta en %s\n", locale);
         	if(!strcmp(locale,"es")){
             		strftime(buff, BUF_LEN, "%d/%m/%Y\r\n", ptm);
             	} else{

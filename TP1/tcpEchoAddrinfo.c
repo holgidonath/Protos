@@ -25,7 +25,7 @@
 #define MAX_SOCKETS 30
 
 #define PORT_UDP 9999
-#define MAX_PENDING_CONNECTIONS   3    // un valor bajo, para realizar pruebas
+#define MAX_PENDING_CONNECTIONS 30    // un valor bajo, para realizar pruebas
 
 
 /**
@@ -57,6 +57,26 @@ int parsePort(char * str){
 	return PORT;
 }
 
+void int_to_string(char str[], int num){
+	int i, rem, len = 0, n;
+	n = num;
+	bzero(str, strlen(str));
+	while(n != 0){
+		len++;
+		n /= 10;
+	}
+	for(i = 0; i < len ; i++){
+		rem = num % 10;
+		num = num /10;
+		str[len - (i + 1)] = rem + '0';
+	}
+	if(len == 0){
+		str[0] = '0';
+		len++;
+	}
+	str[len] = '\0';
+}
+
 int main(int argc , char *argv[])
 {
 	// printf("hola :)\n");
@@ -86,10 +106,10 @@ int main(int argc , char *argv[])
 	int limit[MAX_SOCKETS] = {0};
 	int commandParsed[MAX_SOCKETS] = {BEGIN};
 
-	char locale[] = "en";
+	char locale[] = "es";
 
-	//struct sockaddr_storage clntAddr; // Client address
-	//socklen_t clntAddrLen = sizeof(clntAddr);
+	// struct sockaddr_storage clntAddr; // Client address
+	// socklen_t clntAddrLen = sizeof(clntAddr);
 
 	char buffer[BUFFSIZE + 1];  //data buffer of 1K
 
@@ -224,10 +244,10 @@ int main(int argc , char *argv[])
 
 		// Servicio UDP
 		if(FD_ISSET(udpSock, &readfds)) {
-			printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
-			incorrect_datagrams_qty += handleAddrInfo(udpSock, &locale, connections_qty, incorrect_lines_qty, incorrect_datagrams_qty, correct_lines_qty);
-			printf("%d\n",incorrect_datagrams_qty);
-			printf("%s\n",locale);
+			// printf("%d %d %d %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+			incorrect_datagrams_qty += handleAddrInfo(udpSock, locale, connections_qty, incorrect_lines_qty, incorrect_datagrams_qty, correct_lines_qty);
+			// printf("%d\n",incorrect_datagrams_qty);
+			// printf("%s\n",locale);
 		}
 
 		//If something happened on the TCP master socket , then its an incoming connection
@@ -240,7 +260,9 @@ int main(int argc , char *argv[])
 					log(ERROR, "Accept error on master socket %d", mSock);
 					continue;
 				}
-				connections_qty += 1;
+				if(new_socket >= 0){
+					connections_qty += 1;
+				}
 				// add new socket to array of sockets
 				for (i = 0; i < max_clients; i++) 
 				{
@@ -259,7 +281,7 @@ int main(int argc , char *argv[])
 			sd = client_socket[i];
 
 			if (FD_ISSET(sd, &writefds)) {
-				correct_lines_qty+=1;
+				// correct_lines_qty+=1;
 				handleWrite(sd, bufferWrite + i, &writefds);
 			}
 		}
@@ -292,23 +314,28 @@ int main(int argc , char *argv[])
 					log(DEBUG, "Received %zu bytes from socket %d\n", valread, sd);
 					// activamos el socket para escritura y almacenamos en el buffer de salida
 					FD_SET(sd, &writefds);
-					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], &locale);
+					unsigned state = parseCommand(buffer, &commandParsed[i], &valread, &wasValid[i], &limit[i], &bufferWrite[i], locale, &correct_lines_qty, &incorrect_lines_qty);
 					// valread = bufferWrite[i].len ;
 					// int correct = echoParser(buffer,&valread, &wasValid[i], &limit[i]);
 
 					if(state == INVALID || state == INVALID_GET){
 						incorrect_lines_qty += 1;
-						correct_lines_qty -= 1;
+						// correct_lines_qty -= 1;
 						char * error_msg = "Invalid command!\r\n";
 						valread = strlen(error_msg);
 						bufferWrite[i].buffer = realloc(bufferWrite[i].buffer, bufferWrite[i].len + valread);
-						memcpy(bufferWrite[i].buffer + bufferWrite[i].len, error_msg, valread);
-						bufferWrite[i].len += valread;
+						if(bufferWrite[i].buffer == NULL){
+							log(ERROR, "Realloc for buffer failed on socket %d\n", sd);
+						} else {
+							memcpy(bufferWrite[i].buffer + bufferWrite[i].len, error_msg, valread);
+							bufferWrite[i].len += valread;
+						}
+						
 					}
 					
 					// Tal vez ya habia datos en el buffer
 					// TODO: validar realloc != NULL
-
+					bzero(buffer, sizeof(buffer));
 					
 					
 					
@@ -385,15 +412,15 @@ int udpSocket(int port) {
 }
 
 
-int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty) {
+int handleAddrInfo(int socket, char * locale, int connections_qty, int incorrect_lines_qty, int incorrect_datagrams_qty, int correct_lines_qty) {
 	// En el datagrama viene el nombre a resolver
 	// Se le devuelve la informacion asociada
 
-	char buffer[BUFFSIZE];
+	char buffer[BUFFSIZE] = {0};
 	unsigned int len, n;
 	int incorrect_datagrams = 0;
 	struct sockaddr_in clntAddr;
-
+	len = sizeof(clntAddr);
 	// Es bloqueante, deberian invocar a esta funcion solo si hay algo disponible en el socket    
 	n = recvfrom(socket, buffer, BUFFSIZE, 0, ( struct sockaddr *) &clntAddr, &len);
 	if ( buffer[n-1] == '\n') // Por si lo estan probando con netcat, en modo interactivo
@@ -401,7 +428,7 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	buffer[n] = '\0';
 	log(DEBUG, "UDP received:%s", buffer );
 	// TODO: parsear lo recibido para obtener nombre, puerto, etc. Asumimos viene solo el nombre
-	printf("%s", buffer);
+	// printf("%s", buffer);
 	int res = udpParseCommand(buffer);
 	// // Especificamos solo SOCK_STREAM para que no duplique las respuestas
 	// struct addrinfo addrCriteria;                   // Criteria for address match
@@ -414,16 +441,28 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	// TODO: hacer una concatenacion segura
 	// TODO: modificar la funcion printAddressInfo usada en sockets bloqueantes para que sirva
 	//       tanto si se quiere obtener solo la direccion o la direccion mas el puerto
-	char bufferOut[BUFFSIZE];
-	bufferOut[0] = '\0';
-	char bufferAux[BUFFSIZE];
+	char bufferOut[BUFFSIZE] = {0};
+	// char bufferAux[BUFFSIZE] = {0};
 	if (res == 21){
 		strcpy(bufferOut, "Invalid command!");
 		incorrect_datagrams++;
 	} else if (res == 22){
-		strcpy(bufferOut, "Stats for the server:\n");
-		sprintf(bufferAux,"Connections: %d\nIncorrect lines: %d\nCorrect lines: %d\nIncorrect datagrams: %d\n", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
-		strcat(bufferOut, bufferAux);
+		strcpy(bufferOut, "Stats for the server:\r\n");
+		char temp_buff[10];
+		strcat(bufferOut, "Connections: ");
+		int_to_string(temp_buff, connections_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nIncorrect lines: ");
+		int_to_string(temp_buff, incorrect_lines_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nCorrect lines: ");
+		int_to_string(temp_buff, correct_lines_qty);
+		strcat(bufferOut, temp_buff);
+		strcat(bufferOut, "\r\nIncorrect datagrams: ");
+		int_to_string(temp_buff, incorrect_datagrams_qty);
+		strcat(bufferOut, temp_buff);
+		// sprintf(bufferAux,"Connections: %d\r\nIncorrect lines: %d\r\nCorrect lines: %d\r\nIncorrect datagrams: %d", connections_qty, incorrect_lines_qty, correct_lines_qty, incorrect_datagrams_qty);
+		// strcat(bufferOut, bufferAux);
 	} else if (res == 23){
 		strcpy(locale, "en");
 		strcpy(bufferOut, "locale was set for english");
@@ -471,8 +510,9 @@ int handleAddrInfo(int socket, char *locale, int connections_qty, int incorrect_
 	// 	freeaddrinfo(addrList);
 	// }
 	// Enviamos respuesta (el sendto no bloquea)
-	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *) &clntAddr, len);
 
+	sendto(socket, bufferOut, strlen(bufferOut), 0, (const struct sockaddr *) &clntAddr, len);
+	// printf("\n data: %d \n", clntAddr.sin_addr);
 	log(DEBUG, "UDP sent:%s", bufferOut );
 
 	return incorrect_datagrams;
