@@ -16,4 +16,16 @@ struct opt{
     char *origin_server;  /* POP3 origin server address */
 };
 
+/* Read and set cmd line options POSIX style */
+void parseOptions(int argc, char **argv, struct opt *opt);
+
+/* Display help */
+void help();
+
+/* Display usage */
+void usage();
+
+/* Display version related info */
+void version();
+
 #endif

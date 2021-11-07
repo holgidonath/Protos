@@ -37,132 +37,115 @@ user(char *s, struct users *user) {
 
 }
 
-static void
-version(void) {
-    fprintf(stderr, "socks5v version 0.0\n"
-                    "ITBA Protocolos de Comunicación 2020/1 -- Grupo X\n"
-                    "AQUI VA LA LICENCIA\n");
-}
+void
+parseOptions(int argc, char **argv, struct opt *opt) {
+    /* Setting default values  */
+    assert(argv && opt);
+    memset(opt, 0, sizeof(*opt));
+    opt->local_port   = 1110;
+    opt->mgmt_port    = 9090;
+    opt->origin_port  = 110;
+    opt->fstderr      = "/dev/null";
+    opt->pop3_addr    = NULL;        /* TODO:default value */
+    opt->mgmt_addr    = NULL;        /* TODO:default value */
 
-static void
-usage(const char *progname) {
-    fprintf(stderr,
-        "Usage: %s [OPTION]...\n"
-        "\n"
-        "   -h               Imprime la ayuda y termina.\n"
-        "   -l <SOCKS addr>  Dirección donde servirá el proxy SOCKS.\n"
-        "   -L <conf  addr>  Dirección donde servirá el servicio de management.\n"
-        "   -p <SOCKS port>  Puerto entrante conexiones SOCKS.\n"
-        "   -P <conf port>   Puerto entrante conexiones configuracion\n"
-        "   -u <name>:<pass> Usuario y contraseña de usuario que puede usar el proxy. Hasta 10.\n"
-        "   -v               Imprime información sobre la versión versión y termina.\n"
-        "\n"
-        "   --doh-ip    <ip>    \n"
-        "   --doh-port  <port>  XXX\n"
-        "   --doh-host  <host>  XXX\n"
-        "   --doh-path  <host>  XXX\n"
-        "   --doh-query <host>  XXX\n"
-
-        "\n",
-        progname);
-    exit(1);
-}
-
-void 
-parse_args(const int argc, char **argv, struct socks5args *args) {
-    memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
-
-    args->socks_addr = "0.0.0.0";
-    args->socks_port = 1080;
-
-    args->mng_addr   = "127.0.0.1";
-    args->mng_port   = 8080;
-
-    args->disectors_enabled = true;
-
-    args->doh.host = "localhost";
-    args->doh.ip   = "127.0.0.1";
-    args->doh.port = 8053;
-    args->doh.path = "/getnsrecord";
-    args->doh.query = "?dns=";
-
+    /* Parse command line arguments */
     int c;
-    int nusers = 0;
-
-    while (true) {
-        int option_index = 0;
-        static struct option long_options[] = {
-            { "doh-ip",    required_argument, 0, 0xD001 },
-            { "doh-port",  required_argument, 0, 0xD002 },
-            { "doh-host",  required_argument, 0, 0xD003 },
-            { "doh-path",  required_argument, 0, 0xD004 },
-            { "doh-query", required_argument, 0, 0xD005 },
-            { 0,           0,                 0, 0 }
-        };
-
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v", long_options, &option_index);
-        if (c == -1)
-            break;
-
+    const char *opts = "e:l:L:o:p:P:t:hv";
+    while ((c = getopt(argc, argv, opts)) != -1) {
         switch (c) {
             case 'h':
-                usage(argv[0]);
-                break;
-            case 'l':
-                args->socks_addr = optarg;
-                break;
-            case 'L':
-                args->mng_addr = optarg;
-                break;
-            case 'N':
-                args->disectors_enabled = false;
-                break;
-            case 'p':
-                args->socks_port = port(optarg);
-                break;
-            case 'P':
-                args->mng_port   = port(optarg);
-                break;
-            case 'u':
-                if(nusers >= MAX_USERS) {
-                    fprintf(stderr, "maximun number of command line users reached: %d.\n", MAX_USERS);
-                    exit(1);
-                } else {
-                    user(optarg, args->users + nusers);
-                    nusers++;
-                }
+                help();
                 break;
             case 'v':
                 version();
-                exit(0);
                 break;
-            case 0xD001:
-                args->doh.ip = optarg;
+            case 'o':
+                opt->mgmt_port = port(optarg);
                 break;
-            case 0xD002:
-                args->doh.port = port(optarg);
+            case 'p':
+                opt->local_port = port(optarg);
                 break;
-            case 0xD003:
-                args->doh.host = optarg;
+            case 'P':
+                opt->origin_port = port(optarg);
                 break;
-            case 0xD004:
-                args->doh.path = optarg;
+            case 'l':
+                opt->pop3_addr = optarg;
                 break;
-            case 0xD005:
-                args->doh.query = optarg;
+            case 'L':
+                opt->mgmt_addr = optarg;
                 break;
-            default:
-                fprintf(stderr, "unknown argument %d.\n", c);
-                exit(1);
+            case 't':
+                opt->exec = optarg;
+                break;
+            case 'e':
+                opt->fstderr = optarg;
+                break;
+            case '?':
+                log(FATAL, "Invalid arguments");
+                exit( EXIT_FAILURE );
         }
+    }
 
+    if( argc < 2 ) {
+        usage();
+        exit( EXIT_FAILURE );
     }
-    if (optind < argc) {
-        fprintf(stderr, "argument not accepted: ");
-        while (optind < argc) {
-            fprintf(stderr, "%s ", argv[optind++]);
-        }
-        fprintf(stderr, "\n");
-        exit(1);
-    }
+    opt->origin_server = argv[optind];
+}
+
+/* help */
+static void
+help() {
+    printf(
+            "USAGE\n"
+            "    %s [OPTIONS] origin-server\n"
+            "\n"
+            "ARGUMENTS\n"
+            "<origin-server>\n"
+            "    POP3 origin server address.\n"
+            "    IPV4, IPV6, Domain Name\n"
+            "\n"
+            "OPTIONS\n"
+            "-e <error-file>\n"
+            "    Set error file to redirec stderr.\n"
+            "    Default is /dev/null\n"
+            "-h\n"
+            "    Prints help\n"
+            "-l <pop3-address>\n"
+            "    Set proxy address.\n"
+            "    Default listening at all interfaces\n"
+            "-L <management-address>\n"
+            "    Set management service address.\n"
+            "    Default using loopback\n"
+            "-o <management-port>\n"
+            "    Set port for management service.\n"
+            "    Default is 9090\n"
+            "-p <local-port>\n"
+            "    TCP port for incoming POP3 connections\n"
+            "    Default is 1110\n"
+            "-P <origin-port>\n"
+            "    TCP origin port for POP3 origin server\n"
+            "    Default is 110\n"
+            "-t <cmd>\n"
+            "    Command for extern filters.\n"
+            "-v\n"
+            "    Prints version related information\n"
+            "\n"
+            , appname);
+
+    exit( EXIT_SUCCESS );
+}
+
+static void
+version() {
+    printf("%s %s\n", appname, VERSION);
+    exit( EXIT_SUCCESS );
+}
+
+static void
+usage(){
+    printf(
+            "%s [-hv] [-e <file>] [-l <pop3-address>] [-L <management-address>] [-o <management-port>] [-p <local-port>] [-P <origin-port>] [-t <cmd>] origin-server\n"
+            , appname);
 }
