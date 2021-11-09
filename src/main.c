@@ -16,9 +16,9 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "socks5.h"
+// #include "socks5.h"
 #include "../TP2/src/selector.h"
-#include "socks5nio.h"
+// #include "socks5nio.h"
 
 #include "include/main.h"
 #include "include/logger.h"
@@ -47,5 +47,6 @@ main(const int argc, const char **argv) {
     printf("pop3_addr     = %s\n", opt.pop3_addr);
     printf("origin_server = %s\n", opt.origin_server);
     printf("cmd           = %s\n", opt.exec);
+    printf("appname       = %s\n", appname);
 
 }

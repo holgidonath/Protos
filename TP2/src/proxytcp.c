@@ -25,6 +25,13 @@
 
 #include "selector.h"
 #include "buffer.h"
+#include "../../src/include/logger.h"
+#include "args.h"
+
+#define N(x) (sizeof(x)/sizeof((x)[0]))
+#define ATTACHMENT(key) ( (struct socks5 *)(key)->data)
+
+struct opt opt;
 
 typedef struct client
 {
@@ -47,8 +54,8 @@ typedef struct origin
 
 struct connection 
 {
-    client * client;
-    origin * origin;
+    client client;
+    origin origin;
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
 };
@@ -62,12 +69,120 @@ new_connection(int client_fd)
     if (con != NULL)
     {
         memset(con, 0x00, sizeof(*con));
-        con->origin->origin_fd = -1;
-        con->client->client_fd = client_fd;
+        
+        con->origin.origin_fd = -1;
+        con->client.client_fd = client_fd;
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
     return con;
+}
+
+void
+origin_connection(struct opt opts)
+{
+    // int origin = 0, valread;
+    // struct sockaddr_in serv_addr;
+    // char *hello = "Hello from client";
+    // char buffer[1024] = {0};
+    // if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    // {
+    //     goto fail;
+    // }
+    // if(selector_fd_set_nio(origin) == -1) {
+    //     goto fail;
+    // }
+
+    // if(SELECTOR_SUCCESS != selector_register(key->s, origin, NULL, OP_READ, NULL)) {
+    //     goto fail;
+    // }
+
+    // serv_addr.sin_family = AF_INET;
+    // serv_addr.sin_port = htons(opts.origin_port);
+       
+    // // Convert IPv4 and IPv6 addresses from text to binary form
+    // if(inet_pton(AF_INET, opts.origin_server, &serv_addr.sin_addr)<=0) 
+    // {
+    //     goto fail;
+    // }
+   
+    // if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    // {
+    //     goto fail;
+        
+    // }
+    // send(origin , hello , strlen(hello) , 0 );
+    // printf("Hello message sent\n");
+    // valread = read( origin , buffer, 1024);
+    // printf("%s\n",buffer );
+    // return;
+//      *fd = socket(ATTACHMENT(key)->origin_domain, SOCK_STREAM, 0);
+
+//   if (*fd == -1) {
+
+//     error = true;
+
+//     goto finally;
+
+//   }
+
+//   if (selector_fd_set_nio(*fd) == -1) {
+
+//     goto finally;
+
+//   }
+
+//   if (-1 == connect(*fd, (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
+
+//               ATTACHMENT(key)->origin_addr_len)) {
+
+//     if(errno == EINPROGRESS) {
+
+//       // es esperable, tenemos que esperar a la conexión
+
+
+//       // dejamos de de pollear el socket del cliente
+
+//       selector_status st = selector_set_interest_key(key, OP_NOOP);
+
+//       if(SELECTOR_SUCCESS != st) {
+
+//         error = true;
+
+//         goto finally;
+
+//       }
+
+
+//       // esperamos la conexion en el nuevo socket
+
+//       st = selector_register(key->s, *fd, &socks5_handler,
+
+//                    OP_WRITE, key->data);
+
+//       if(SELECTOR_SUCCESS != st) {
+
+//         error = true;
+
+//         goto finally;
+
+//       }
+
+//       ATTACHMENT(key)->references += 1;
+
+//     } else {
+
+//       status = errno_to_socks(errno);
+
+//       error = true;
+
+//       goto finally;
+
+//     }
+// fail:
+//     if(origin != -1) {
+//         close(origin);
+//     }
 }
 
 void
@@ -101,6 +216,8 @@ proxy_tcp_connection(struct selector_key *key){
     }
 
     // Falta hacer el connect al ORIGIN
+    //origin_connection(opt);
+    
 
     return ;
 
@@ -122,24 +239,24 @@ sigterm_handler(const int signal) {
 int
 main(const int argc, const char **argv) {
     unsigned port = 1080;
+    parseOptions(argc, argv, &opt);
+    // if(argc == 1) {
+    //     // utilizamos el default
+    // } else if(argc == 2) {
+    //     char *end     = 0;
+    //     const long sl = strtol(argv[1], &end, 10);
 
-    if(argc == 1) {
-        // utilizamos el default
-    } else if(argc == 2) {
-        char *end     = 0;
-        const long sl = strtol(argv[1], &end, 10);
-
-        if (end == argv[1]|| '\0' != *end 
-           || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-           || sl < 0 || sl > USHRT_MAX) {
-            fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-            return 1;
-        }
-        port = sl;
-    } else {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-        return 1;
-    }
+    //     if (end == argv[1]|| '\0' != *end 
+    //        || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
+    //        || sl < 0 || sl > USHRT_MAX) {
+    //         fprintf(stderr, "port should be an integer: %s\n", argv[1]);
+    //         return 1;
+    //     }
+    //     port = sl;
+    // } else {
+    //     fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+    //     return 1;
+    // }
 
     // no tenemos nada que leer de stdin
     close(0);
@@ -241,7 +358,7 @@ finally:
     }
     selector_close();
 
-    socksv5_pool_destroy();
+    // socksv5_pool_destroy();
 
     if(server >= 0) {
         close(server);

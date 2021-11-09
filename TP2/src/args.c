@@ -6,8 +6,8 @@
 #include <getopt.h>
 #include <assert.h>
 
-#include "include/args.h"
-#include "include/logger.h"
+#include "args.h"
+#include "../../src/include/logger.h"
 
 static unsigned short
 port(const char *s) {

@@ -23,8 +23,14 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-#include "selector.h"
-#include "buffer.h"
+#include "../TP2/src/selector.h"
+#include "../TP2/src/buffer.h"
+#include "include/args.h"
+
+
+#define N(x) (sizeof(x)/sizeof((x)[0]))
+
+struct opt opt;
 
 typedef struct client
 {
@@ -54,6 +60,12 @@ struct connection
 };
 
 
+struct opt
+get_opt()
+{
+    return opt;
+}
+
 struct connection * 
 new_connection(int client_fd)
 {
@@ -71,10 +83,49 @@ new_connection(int client_fd)
 }
 
 void
+origin_connection(struct opt opts)
+{
+    int origin = 0, valread;
+    struct sockaddr_in serv_addr;
+    char *hello = "Hello from client";
+    char buffer[1024] = {0};
+    if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        goto fail;
+    }
+    if(selector_fd_set_nio(origin) == -1) {
+        goto fail;
+    }
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(opts.origin_port);
+       
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if(inet_pton(AF_INET, opts.origin_server, &serv_addr.sin_addr)<=0) 
+    {
+        goto fail;
+    }
+   
+    if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        goto fail;
+        
+    }
+    send(origin , hello , strlen(hello) , 0 );
+    printf("Hello message sent\n");
+    valread = read( origin , buffer, 1024);
+    printf("%s\n",buffer );
+    return;
+fail:
+    if(origin != -1) {
+        close(origin);
+    }
+}
+
+void
 proxy_tcp_connection(struct selector_key *key){
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len = sizeof(client_addr);
-   
+    struct opt options = get_opt();
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
     if(client == -1) {
@@ -100,7 +151,7 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
 
-    // Falta hacer el connect al ORIGIN
+    //origin_connection(opt);
 
     return ;
 
@@ -123,23 +174,25 @@ int
 main(const int argc, const char **argv) {
     unsigned port = 1080;
 
-    if(argc == 1) {
-        // utilizamos el default
-    } else if(argc == 2) {
-        char *end     = 0;
-        const long sl = strtol(argv[1], &end, 10);
+    // if(argc == 1) {
+    //     // utilizamos el default
+    // } else if(argc == 2) {
+    //     char *end     = 0;
+    //     const long sl = strtol(argv[1], &end, 10);
 
-        if (end == argv[1]|| '\0' != *end 
-           || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-           || sl < 0 || sl > USHRT_MAX) {
-            fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-            return 1;
-        }
-        port = sl;
-    } else {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-        return 1;
-    }
+    //     if (end == argv[1]|| '\0' != *end 
+    //        || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
+    //        || sl < 0 || sl > USHRT_MAX) {
+    //         fprintf(stderr, "port should be an integer: %s\n", argv[1]);
+    //         return 1;
+    //     }
+    //     port = sl;
+    // } else {
+    //     fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+    //     return 1;
+    // }
+    
+    parseOptions(argc, argv, &opt);
 
     // no tenemos nada que leer de stdin
     close(0);
@@ -241,7 +294,7 @@ finally:
     }
     selector_close();
 
-    socksv5_pool_destroy();
+    //socksv5_pool_destroy();
 
     if(server >= 0) {
         close(server);

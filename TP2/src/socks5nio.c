@@ -17,7 +17,6 @@
 #include "buffer.h"
 
 #include "stm.h"
-#include "socks5nio.h"
 #include"netutils.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
