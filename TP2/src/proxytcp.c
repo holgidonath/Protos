@@ -26,6 +26,8 @@
 #include "selector.h"
 #include "buffer.h"
 
+#define N(x) (sizeof(x)/sizeof((x)[0]))
+
 typedef struct client
 {
 
@@ -47,8 +49,8 @@ typedef struct origin
 
 struct connection 
 {
-    client * client;
-    origin * origin;
+    client client;
+    origin origin;
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
 };
@@ -62,8 +64,9 @@ new_connection(int client_fd)
     if (con != NULL)
     {
         memset(con, 0x00, sizeof(*con));
-        con->origin->origin_fd = -1;
-        con->client->client_fd = client_fd;
+        
+        con->origin.origin_fd = -1;
+        con->client.client_fd = client_fd;
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
@@ -101,6 +104,7 @@ proxy_tcp_connection(struct selector_key *key){
     }
 
     // Falta hacer el connect al ORIGIN
+    
 
     return ;
 
@@ -241,7 +245,7 @@ finally:
     }
     selector_close();
 
-    socksv5_pool_destroy();
+    // socksv5_pool_destroy();
 
     if(server >= 0) {
         close(server);
