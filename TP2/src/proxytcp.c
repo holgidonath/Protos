@@ -273,6 +273,7 @@ int
 create_management_socket(struct sockaddr_in addr, struct opt opt)
 {
 
+    memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.mgmt_port);
@@ -348,9 +349,9 @@ main(const int argc, const char **argv) {
     struct sockaddr_in mngmt_addr;
 
     int proxy_fd = create_proxy_socket(addr, opt);
-    int admin_fd = create_management_socket(mngmt_addr,opt);
+    // int admin_fd = create_management_socket(mngmt_addr,opt);
 
-    if(proxy_fd == -1 || admin_fd == -1)
+    if(proxy_fd == -1 ) //o admin_fd
     {
         goto finally;
     }
