@@ -237,6 +237,83 @@ sigterm_handler(const int signal) {
 }
 
 int
+create_proxy_socket(struct sockaddr_in addr, struct opt opt)
+{
+
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port        = htons(opt.local_port);
+
+    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(server < 0) {
+       perror("unable to create proxy socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind proxy socket");
+        return -1;
+    }
+
+    if (listen(server, 20) < 0) {
+        perror("unable to listen in proxy socket");
+        return -1;
+    }
+
+    return server;
+}
+
+int
+create_management_socket(struct sockaddr_in addr, struct opt opt)
+{
+
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port        = htons(opt.mgmt_port);
+
+    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(server < 0) {
+       perror("unable to create management socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.mgmt_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind management socket");
+        return -1;
+    }
+
+    if (listen(server, 20) < 0) {
+        perror("unable to listen in management socket");
+        return -1;
+    }
+
+    return server;
+}
+
+
+//-----------------------------------------------------------------------------------------------------------------
+
+
+//                                     MAIN
+
+
+//-----------------------------------------------------------------------------------------------------------------
+
+
+
+
+int
 main(const int argc, const char **argv) {
     unsigned port = 1080;
     parseOptions(argc, argv, &opt);
@@ -265,39 +342,26 @@ main(const int argc, const char **argv) {
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
+
+  
     struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port        = htons(port);
+    struct sockaddr_in mngmt_addr;
 
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-        err_msg = "unable to create socket";
+    int proxy_fd = create_proxy_socket(addr, opt);
+    int admin_fd = create_management_socket(mngmt_addr,opt);
+
+    if(proxy_fd == -1 || admin_fd == -1)
+    {
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", port);
-
-    // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
-
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        err_msg = "unable to bind socket";
-        goto finally;
-    }
-
-    if (listen(server, 20) < 0) {
-        err_msg = "unable to listen";
-        goto finally;
-    }
 
     // registrar sigterm es útil para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT,  sigterm_handler);
 
-    if(selector_fd_set_nio(server) == -1) {
+    if(selector_fd_set_nio(proxy_fd) == -1) {
         err_msg = "getting server socket flags";
         goto finally;
     }
@@ -323,7 +387,7 @@ main(const int argc, const char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
-    ss = selector_register(selector, server, &passive_accept_handler,
+    ss = selector_register(selector, proxy_fd, &passive_accept_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering fd";
@@ -360,77 +424,11 @@ finally:
 
     // socksv5_pool_destroy();
 
-    if(server >= 0) {
-        close(server);
+    if(proxy_fd >= 0) {
+        close(proxy_fd);
     }
     return ret;
 }
 
-int
-create_proxy_socket(struct sockaddr_in addr, struct opt opt)
-{
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port        = htons(opt.local_port);
-
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-       perror("unable to create proxy socket");
-        return -1;
-    }
-
-    fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
-
-    // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
-
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        perror("unable to bind proxy socket");
-        return -1;
-    }
-
-    if (listen(server, 20) < 0) {
-        perror("unable to listen in proxy socket");
-        return -1;
-    }
-
-    return server;
-}
-
-int
-create_management_socket(struct sockaddr_in addr, struct opt opt)
-{
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port        = htons(opt.mgmt_port);
-
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-       perror("unable to create management socket");
-        return -1;
-    }
-
-    fprintf(stdout, "Listening on TCP port %d\n", opt.mgmt_port);
-
-    // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
-
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        perror("unable to bind management socket");
-        return -1;
-    }
-
-    if (listen(server, 20) < 0) {
-        perror("unable to listen in management socket");
-        return -1;
-    }
-
-    return server;
-}
 
