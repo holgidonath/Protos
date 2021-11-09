@@ -366,4 +366,71 @@ finally:
     return ret;
 }
 
+int
+create_proxy_socket(struct sockaddr_in addr, struct opt opt)
+{
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port        = htons(opt.local_port);
+
+    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(server < 0) {
+       perror("unable to create proxy socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind proxy socket");
+        return -1;
+    }
+
+    if (listen(server, 20) < 0) {
+        perror("unable to listen in proxy socket");
+        return -1;
+    }
+
+    return server;
+}
+
+int
+create_management_socket(struct sockaddr_in addr, struct opt opt)
+{
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family      = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port        = htons(opt.mgmt_port);
+
+    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(server < 0) {
+       perror("unable to create management socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.mgmt_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind management socket");
+        return -1;
+    }
+
+    if (listen(server, 20) < 0) {
+        perror("unable to listen in management socket");
+        return -1;
+    }
+
+    return server;
+}
 
