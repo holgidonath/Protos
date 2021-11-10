@@ -38,32 +38,26 @@ enum proxy_states
 {
     CONNECTING,
     RESOLVING,
+    COPY,
     DONE,
     ERROR
 };
 
-static const struct state_definition client_statbl[] = 
+struct copy
 {
-    {
-        .state = CONNECTING
-
-    },
-    {
-        .state = RESOLVING
-    },
-    {
-        .state = DONE
-    },
-    {
-        .state = ERROR
-    },
-
+    int *fd;
+    buffer *rb, *wb;
+    fd_interest duplex;
+    struct copy *other;
+ 
 };
+
 
 typedef struct client
 {
 
     int client_fd;
+    struct copy copy;
 
 
 } client;
@@ -75,6 +69,7 @@ typedef struct origin
     socklen_t origin_addr_len;
     struct addrinfo *origin_resolution;
     struct addrinfo *origin_resolution_current;
+    struct copy copy;
 
 
 } origin;
@@ -86,6 +81,30 @@ struct connection
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     struct state_machine stm;
+};
+
+static const struct state_definition client_statbl[] = 
+{
+    {
+        .state = CONNECTING,
+
+    },
+    {
+        .state = RESOLVING,
+    },
+    {
+        .state = COPY,
+        .on_arrival = copy_init,
+    //     .on_read_ready = copy_r,
+    //     .on_write_ready = copy_w,
+    },
+    {
+        .state = DONE,
+    },
+    {
+        .state = ERROR,
+    },
+
 };
 
 
@@ -439,7 +458,82 @@ proxy_done(struct selector_key* key) {
 //-----------------------------------------------------------------------------------------------------------------
 
 
-//                                     MAIN
+//                                          COPY FUNCTIONS
+
+
+//-----------------------------------------------------------------------------------------------------------------
+
+static void
+copy_init(const unsigned state, struct selector_key *key)
+{
+    struct copy * d = &ATTACHMENT(key)->client.copy;
+
+    d->fd       = &ATTACHMENT(key)->client.client_fd;
+    d->rb       = &ATTACHMENT(key)->read_buffer;
+    d->wb       = &ATTACHMENT(key)->write_buffer;
+    d->duplex   = OP_READ | OP_WRITE;
+    d->other    = &ATTACHMENT(key)->origin.copy;
+
+    d->fd       = &ATTACHMENT(key)->origin.origin_fd;
+    d->rb       = &ATTACHMENT(key)->write_buffer;
+    d->wb       = &ATTACHMENT(key)->read_buffer;
+    d->duplex   = OP_READ | OP_WRITE;
+    d->other    = &ATTACHMENT(key)->client.copy;
+}
+
+static fd_interest
+copy_compute_interests(fd_selector s, struct  copy* d)
+{
+    fd_interest ret = OP_NOOP;
+    if((d->duplex & OP_READ) && buffer_can_write(d->rb))
+    {
+        ret |= OP_READ;
+    }
+    if((d->duplex & OP_WRITE) && buffer_can_read(d->wb))
+    {
+        ret |= OP_WRITE;
+    }
+    if(SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret))
+    {
+        abort();
+    }
+    return ret;
+}
+
+static struct copy *
+copy_ptr(struct selector_key * key)
+{
+    struct copy *d = &ATTACHMENT(key)->client.copy;
+
+    if(*d->fd == key->fd)
+    {
+        //ok
+    }
+    else
+    {
+        d = d->other;
+    }
+    return d;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//-----------------------------------------------------------------------------------------------------------------
+
+
+//                                               MAIN
 
 
 //-----------------------------------------------------------------------------------------------------------------
