@@ -25,12 +25,11 @@
 
 #include "selector.h"
 #include "buffer.h"
-#include "../../src/include/logger.h"
 #include "args.h"
 #include "stm.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
-#define ATTACHMENT(key) ( (struct connection *)(key)->data)
+#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
 struct opt opt;
 
@@ -39,7 +38,7 @@ enum proxy_states
     CONNECTING,
     RESOLVING,
     DONE,
-    ERROR
+    PERROR
 };
 
 static const struct state_definition client_statbl[] = 
@@ -55,7 +54,7 @@ static const struct state_definition client_statbl[] =
         .state = DONE
     },
     {
-        .state = ERROR
+        .state = PERROR
     },
 
 };
@@ -107,8 +106,9 @@ new_connection(int client_fd)
         con->client.client_fd = client_fd;
 
         con->stm    .initial = CONNECTING;
-        con->stm    .max_state = ERROR;
-        con->stm    .states = proxy_describe_states();
+        con->stm    .max_state = PERROR;
+        con->stm    .states = client_statbl;
+        //con->stm    .states = proxy_describe_states();
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
@@ -343,6 +343,7 @@ static void proxy_read   (struct selector_key *key);
 static void proxy_write  (struct selector_key *key);
 static void proxy_block  (struct selector_key *key);
 static void proxy_close  (struct selector_key *key);
+static void proxy_done  (struct selector_key *key);
 static const struct fd_handler proxy_handler = {
     .handle_read   = proxy_read,
     .handle_write  = proxy_write,
@@ -355,7 +356,7 @@ static void proxy_read(struct selector_key *key)
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum proxy_states st = stm_handler_read(stm,key);
 
-    if (ERROR == st || DONE == st)
+    if (PERROR == st || DONE == st)
     {
        proxy_done(key);
     }
@@ -366,7 +367,7 @@ static void proxy_write(struct selector_key *key)
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum proxy_states st = stm_handler_write(stm,key);
 
-    if (ERROR == st || DONE == st)
+    if (PERROR == st || DONE == st)
     {
        proxy_done(key);
     }
@@ -378,7 +379,7 @@ static void proxy_block(struct selector_key *key)
     struct state_machine *stm = &ATTACHMENT(key)->stm;
     const enum proxy_states st = stm_handler_block(stm,key);
 
-    if (ERROR == st || DONE == st)
+    if (PERROR == st || DONE == st)
     {
         proxy_done(key);
     }
