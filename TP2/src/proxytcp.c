@@ -22,8 +22,8 @@
 #include <sys/socket.h>  // socket
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <assert.h>
 
-#include "selector.h"
 #include "buffer.h"
 #include "args.h"
 #include "stm.h"
@@ -82,6 +82,13 @@ struct connection
     struct state_machine stm;
 };
 
+static void
+copy_init(const unsigned state, struct selector_key *key);
+static unsigned
+copy_r(struct selector_key *key);
+static unsigned
+copy_w(struct selector_key *key);
+
 static const struct state_definition client_statbl[] = 
 {
     {
@@ -94,8 +101,8 @@ static const struct state_definition client_statbl[] =
     {
         .state = COPY,
         .on_arrival = copy_init,
-    //     .on_read_ready = copy_r,
-    //     .on_write_ready = copy_w,
+        .on_read_ready = copy_r,
+        .on_write_ready = copy_w,
     },
     {
         .state = DONE,
@@ -139,8 +146,7 @@ new_connection(int client_fd)
 
         con->stm    .initial = CONNECTING;
         con->stm    .max_state = PERROR;
-        con->stm    .states = client_statbl;
-        //con->stm    .states = proxy_describe_states();
+        con->stm    .states = proxy_describe_states();
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
