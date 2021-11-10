@@ -357,7 +357,7 @@ static void proxy_read(struct selector_key *key)
 
     if (ERROR == st || DONE == st)
     {
-        // socksv5_done(key) ---> replace
+       proxy_done(key);
     }
 }
 
@@ -368,20 +368,10 @@ static void proxy_write(struct selector_key *key)
 
     if (ERROR == st || DONE == st)
     {
-        // socksv5_done(key) ---> replace
+       proxy_done(key);
     }
 }
 
-// static void proxy_close(struct selector_key *key)
-// {
-//     struct state_machine *stm = &ATTACHMENT(key)->stm;
-//     const enum proxy_states st = stm_handler_close(stm,key);
-
-//     if (ERROR == st || DONE == st)
-//     {
-//         // socksv5_done(key) ---> replace
-//     }
-// }
 
 static void proxy_block(struct selector_key *key)
 {
@@ -390,9 +380,47 @@ static void proxy_block(struct selector_key *key)
 
     if (ERROR == st || DONE == st)
     {
-        // socksv5_done(key) ---> replace
+        proxy_done(key);
     }
 }
+static void
+
+proxy_close(struct selector_key *key) {
+
+//   proxy_destroy(ATTACHMENT(key));
+
+}
+
+
+static void
+
+proxy_done(struct selector_key* key) {
+
+  const int fds[] = {
+
+    ATTACHMENT(key)->client.client_fd,
+
+    ATTACHMENT(key)->origin.origin_fd,
+
+  };
+
+  for(unsigned i = 0; i < N(fds); i++) {
+
+    if(fds[i] != -1) {
+
+      if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
+
+        abort();
+
+      }
+
+      close(fds[i]);
+
+    }
+
+  }
+}
+// FALTA IMPLEMENTAR DESTROYERS
 
 
 //-----------------------------------------------------------------------------------------------------------------
