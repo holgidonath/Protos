@@ -89,8 +89,21 @@ struct connection
 };
 
 
+static const struct state_definition *
+proxy_describe_states(void)
+{
+   return client_statbl;
+};
 
 
+//---------------------------------------------------------------------------------------
+
+
+
+//                              CONNECTIONS
+
+
+//------------------------------------------------------------------------------------------
 
 
 
