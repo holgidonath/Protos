@@ -90,6 +90,10 @@ struct connection
 
 
 
+
+
+
+
 struct connection * 
 new_connection(int client_fd)
 {
@@ -210,19 +214,19 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
     struct connection *connection = new_connection(client);
-    // if(state == NULL) {
-    //     // sin un estado, nos es imposible manejaro.
-    //     // tal vez deberiamos apagar accept() hasta que detectemos
-    //     // que se liberó alguna conexión.
-    //     goto fail;
-    // }
+    if(connection == NULL) {
+        // sin un estado, nos es imposible manejaro.
+        // tal vez deberiamos apagar accept() hasta que detectemos
+        // que se liberó alguna conexión.
+        goto fail;
+    }
 
     // memcpy(&con->client->client_addr, &client_addr, client_addr_len);
     // con->client->client_addr_len = client_addr_len;
 
     // Falta ver todo lo de la STM en struct connection
 
-    // if(SELECTOR_SUCCESS != selector_register(key->s, client, NULL, OP_NOOP, NULL)) {
+    // if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
     //     goto fail;
     // }
 
@@ -245,6 +249,19 @@ sigterm_handler(const int signal) {
     printf("signal %d, cleaning up and exiting\n",signal);
     done = true;
 }
+
+
+
+//---------------------------------------------------------------------------------------
+
+
+
+//                          CREATE PASSIVE SOCKETS
+
+
+//------------------------------------------------------------------------------------------
+
+
 
 int
 create_proxy_socket(struct sockaddr_in addr, struct opt opt)
@@ -312,11 +329,6 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     return server;
 }
 
-static const struct state_definition *
-proxy_describe_states(void)
-{
-    return client_statbl;
-}
 
 //---------------------------------------------------------------------------------------
 
@@ -360,16 +372,16 @@ static void proxy_write(struct selector_key *key)
     }
 }
 
-static void proxy_close(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_close(stm,key);
+// static void proxy_close(struct selector_key *key)
+// {
+//     struct state_machine *stm = &ATTACHMENT(key)->stm;
+//     const enum proxy_states st = stm_handler_close(stm,key);
 
-    if (ERROR == st || DONE == st)
-    {
-        // socksv5_done(key) ---> replace
-    }
-}
+//     if (ERROR == st || DONE == st)
+//     {
+//         // socksv5_done(key) ---> replace
+//     }
+// }
 
 static void proxy_block(struct selector_key *key)
 {
