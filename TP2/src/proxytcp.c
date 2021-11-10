@@ -516,18 +516,81 @@ copy_ptr(struct selector_key * key)
     return d;
 }
 
+static unsigned
+copy_r(struct selector_key *key)
+{
+    struct copy *d = copy_ptr(key);
 
+    assert(*d->fd == key->fd);
 
+    size_t size;
+    ssize_t n;
 
+    buffer* b       = d->rb;
+    unsigned ret    = COPY;
 
+    uint8_t *ptr = buffer_write_ptr(b, &size);
+    n = recv(key->fd, ptr, size, 0);
+    if(n <=0 )
+    {
+        shutdown(*d->fd, SHUT_RD);
+        d->duplex &= ~OP_READ;
+        if(*d->other->fd != -1)
+        {
+            shutdown(*d->other->fd, SHUT_WR);
+            d->other->duplex &= ~OP_WRITE;
+        }
+    }
+    else
+    {
+        buffer_write_adv(b,n);
+    }
+    copy_compute_interests(key->s, d);
+    copy_compute_interests(key->s, d->other);
+    if(d->duplex == OP_NOOP)
+    {
+        ret = DONE;
+    }
+    return ret;
+}
 
+static unsigned
+copy_w(struct selector_key *key)
+{
+    struct copy *d = copy_ptr(key);
 
+    assert(*d->fd == key->fd);
 
+    size_t size;
+    ssize_t n;
 
+    buffer* b       = d->wb;
+    unsigned ret    = COPY;
 
-
-
-
+    uint8_t *ptr = buffer_read_ptr(b, &size);
+    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    if(n == -1)
+    {
+        shutdown(*d->fd, SHUT_WR);
+        d->duplex &= ~OP_WRITE;
+        if(*d->other->fd != -1)
+        {
+            shutdown(*d->other->fd, SHUT_RD);
+            d->other->duplex &= ~OP_READ;
+        }
+    }
+    else
+    {
+        buffer_read_adv(b,n);
+    }
+    copy_compute_interests(key->s, d);
+    copy_compute_interests(key->s, d->other);
+    if(d->duplex == OP_NOOP)
+    {
+        ret = DONE;
+    }
+    return ret;
+}
 
 
 //-----------------------------------------------------------------------------------------------------------------
