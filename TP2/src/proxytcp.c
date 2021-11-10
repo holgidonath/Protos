@@ -27,11 +27,38 @@
 #include "buffer.h"
 #include "../../src/include/logger.h"
 #include "args.h"
+#include "stm.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
-#define ATTACHMENT(key) ( (struct socks5 *)(key)->data)
+#define ATTACHMENT(key) ( (struct connection *)(key)->data)
 
 struct opt opt;
+
+enum proxy_states
+{
+    CONNECTING,
+    RESOLVING,
+    DONE,
+    ERROR
+};
+
+static const struct state_definition client_statbl[] = 
+{
+    {
+        .state = CONNECTING
+
+    },
+    {
+        .state = RESOLVING
+    },
+    {
+        .state = DONE
+    },
+    {
+        .state = ERROR
+    },
+
+};
 
 typedef struct client
 {
@@ -58,7 +85,9 @@ struct connection
     origin origin;
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
+    struct state_machine stm;
 };
+
 
 
 struct connection * 
@@ -72,6 +101,12 @@ new_connection(int client_fd)
         
         con->origin.origin_fd = -1;
         con->client.client_fd = client_fd;
+
+        con->stm    .initial = CONNECTING;
+        con->stm    .max_state = ERROR;
+        con->stm    .states = proxy_describe_states();
+        stm_init(&con->stm);
+
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
@@ -302,6 +337,76 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     return server;
 }
 
+static const struct state_definition *
+proxy_describe_states(void)
+{
+    return client_statbl;
+}
+
+//---------------------------------------------------------------------------------------
+
+
+
+//       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
+
+
+//------------------------------------------------------------------------------------------
+
+static void proxy_read   (struct selector_key *key);
+static void proxy_write  (struct selector_key *key);
+static void proxy_block  (struct selector_key *key);
+static void proxy_close  (struct selector_key *key);
+static const struct fd_handler proxy_handler = {
+    .handle_read   = proxy_read,
+    .handle_write  = proxy_write,
+    .handle_close  = proxy_close,
+    .handle_block  = proxy_block,
+};
+
+static void proxy_read(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_read(stm,key);
+
+    if (ERROR == st || DONE == st)
+    {
+        // socksv5_done(key) ---> replace
+    }
+}
+
+static void proxy_write(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_write(stm,key);
+
+    if (ERROR == st || DONE == st)
+    {
+        // socksv5_done(key) ---> replace
+    }
+}
+
+static void proxy_close(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_close(stm,key);
+
+    if (ERROR == st || DONE == st)
+    {
+        // socksv5_done(key) ---> replace
+    }
+}
+
+static void proxy_block(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_block(stm,key);
+
+    if (ERROR == st || DONE == st)
+    {
+        // socksv5_done(key) ---> replace
+    }
+}
+
 
 //-----------------------------------------------------------------------------------------------------------------
 
@@ -339,6 +444,7 @@ main(const int argc, const char **argv) {
     // no tenemos nada que leer de stdin
     close(0);
 
+    
     const char       *err_msg = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
