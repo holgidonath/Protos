@@ -34,7 +34,6 @@
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
 
-static enum proxy_states origin_connect(struct selector_key * key);
 
 struct opt opt;
 
@@ -87,6 +86,7 @@ struct connection
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     struct state_machine stm;
 };
+static unsigned origin_connect(struct selector_key * key, struct connection * con);
 
 #define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
@@ -111,7 +111,9 @@ static const struct state_definition client_statbl[] =
     },
     {
         .state = CONNECT,
+//		.on_arrival = connection_ready,
         .on_write_ready = connection_ready,
+
     },
     {
         .state = GREETING,
@@ -257,7 +259,7 @@ new_connection(int client_fd)
         con->origin.origin_fd = -1;
         con->client.client_fd = client_fd;
 
-        con->stm    .initial = RESOLVE_ORIGIN;
+        con->stm    .initial = CONNECT;
         con->stm    .max_state = PERROR;
         con->stm    .states = proxy_describe_states();
         stm_init(&con->stm);
@@ -265,6 +267,7 @@ new_connection(int client_fd)
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
+    //log(INFO, "estado actual: %s\n", stm_state(&con->stm));
     return con;
 }
 
@@ -356,12 +359,11 @@ static unsigned connection_ready(struct selector_key  *key)
 	return COPY;
 }
 
-static unsigned origin_connect(struct selector_key * key) {
+static unsigned origin_connect(struct selector_key * key, struct connection * con) {
     enum proxy_states stm_next_status = COPY;
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-//    ATTACHMENT(key)->origin.origin_fd = sock;
-    if (sock < 0) {
+    con->origin.origin_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (con->origin.origin_fd < 0) {
         perror("socket() failed");
         return PERROR;
     }
@@ -376,7 +378,7 @@ static unsigned origin_connect(struct selector_key * key) {
         goto error;
     }
 
-    if (selector_fd_set_nio(sock) == -1) {
+    if (selector_fd_set_nio(con->origin.origin_fd) == -1) {
         goto error;
     }
 
@@ -384,18 +386,18 @@ static unsigned origin_connect(struct selector_key * key) {
 //                (const struct sockaddr *)&ATTACHMENT(key)->origin.origin_addr,
 //                ATTACHMENT(key)->origin.origin_addr_len
 //    ) == -1
-	if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1
+	if (connect(con->origin.origin_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1
             ) {
         if (errno == EINPROGRESS) {
 //            selector_status st = selector_set_interest_key(key, OP_NOOP);
 //            if (SELECTOR_SUCCESS != st) {
 //                goto error;
 //            }
-
-        	selector_status st = selector_register(key->s, sock, &proxy_handler, OP_WRITE, key->data);
+        	selector_status st = selector_register(key->s, con->origin.origin_fd, &proxy_handler, OP_WRITE, con);
             if (SELECTOR_SUCCESS != st) {
                 goto error;
             }
+
 
            // ATTACHMENT(key)->references += 1;
 
@@ -412,8 +414,8 @@ static unsigned origin_connect(struct selector_key * key) {
     error:
     stm_next_status = PERROR;
     log(ERROR, "origin server connection.");
-    if (sock != -1) {
-        close(sock);
+    if (con->origin.origin_fd != -1) {
+        close(con->origin.origin_fd);
     }
 
     return stm_next_status;
@@ -434,6 +436,7 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
     struct connection *connection = new_connection(client);
+    //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
     if(connection == NULL) {
         // sin un estado, nos es imposible manejaro.
         // tal vez deberiamos apagar accept() hasta que detectemos
@@ -457,9 +460,9 @@ proxy_tcp_connection(struct selector_key *key){
 //    ATTACHMENT(key)->origin.origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
 
     //TODO: habria que hacer algo con lo que retorna esa funcion para la stm
-    origin_connect(key);
+    origin_connect(key, connection);
     
-
+    //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
     return ;
 
 fail:

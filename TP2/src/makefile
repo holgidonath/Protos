@@ -6,6 +6,6 @@ PTHREADFLAG = -pthread
 all: proxy-server
 
 proxy-server:
-	$(CC_C) $(PROXY_SOURCES:=.c) -o $(PROXY_NAME) $(PTHREADFLAG)
+	$(CC_C) -g $(PROXY_SOURCES:=.c) -o $(PROXY_NAME) $(PTHREADFLAG)
 
 .PHONY: all
