@@ -86,10 +86,15 @@ struct connection
 
 static void
 copy_init(const unsigned state, struct selector_key *key);
+
 static unsigned
 copy_r(struct selector_key *key);
+
 static unsigned
 copy_w(struct selector_key *key);
+
+static unsigned
+connection_ready(struct selector_key  *key);
 
 static const struct state_definition client_statbl[] = 
 {
