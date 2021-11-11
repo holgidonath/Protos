@@ -32,6 +32,8 @@
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
+static enum proxy_states origin_connect(struct selector_key * key);
+
 struct opt opt;
 
 enum proxy_states
@@ -176,17 +178,17 @@ origin_connection(struct selector_key *key)
         goto fail;
     }
 
-    
+
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(opt.origin_port);
-       
+
     // Convert IPv4 and IPv6 addresses from text to binary form
-    if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0) 
+    if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0)
     {
         goto fail;
     }
-   
+
     if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
     {
         if(errno == EINPROGRESS) {
@@ -200,7 +202,7 @@ origin_connection(struct selector_key *key)
 
       if(SELECTOR_SUCCESS != st) {
 
-        
+
 
         //goto fail;
 
@@ -215,22 +217,22 @@ origin_connection(struct selector_key *key)
 
       if(SELECTOR_SUCCESS != st) {
 
-        
+
 
         //goto fail;
 
       }
 
-      
+
 
     } else {
 
-      
+
 
       //goto fail;
 
     }
-        
+
     }
     send(origin , hello , strlen(hello) , 0 );
     printf("Hello message sent\n");
@@ -247,9 +249,58 @@ fail:
 static unsigned connection_ready(struct selector_key  *key) 
 {
 
-}    
+}
 
+static enum proxy_states origin_connect(struct selector_key * key) {
+    enum proxy_states stm_next_status = COPY;
 
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        perror("socket() failed");
+        return ERROR;
+    }
+
+    if (selector_fd_set_nio(sock) == -1) {
+        goto error;
+    }
+
+    if (connect(sock,
+                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
+                ATTACHMENT(key)->origin_addr_len
+    ) == -1
+            ) {
+        if (errno == EINPROGRESS) {
+//            selector_status st = selector_set_interest_key(key, OP_NOOP);
+//            if (SELECTOR_SUCCESS != st) {
+//                goto error;
+//            }
+
+            st = selector_register(key->s, sock, &proxy_handler, OP_WRITE, key->data);
+            if (SELECTOR_SUCCESS != st) {
+                goto error;
+            }
+
+           // ATTACHMENT(key)->references += 1;
+
+        } else {
+            goto error;
+        }
+    } else {
+        abort();
+    }
+    log(INFO, "origin sever connection success.");
+
+    return stm_next_status;
+
+    error:
+    stm_next_status = ERROR;
+    log(ERROR, "origin server connection.");
+    if (sock != -1) {
+        close(sock);
+    }
+
+    return stm_next_status;
+}
 
 
 void
@@ -282,7 +333,7 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
 
-    origin_connection(key);
+    origin_connect(key);
     
 
     return ;
