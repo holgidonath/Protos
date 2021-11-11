@@ -10,6 +10,7 @@
  * DNS utilizando getaddrinfo), pero toda esa complejidad está oculta en
  * el selector.
  */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -35,8 +36,9 @@ struct opt opt;
 
 enum proxy_states
 {
-    CONNECTING,
-    RESOLVING,
+    RESOLVE_ORIGIN,
+    CONNECT, 
+    GREETING,
     COPY,
     DONE,
     PERROR
@@ -92,11 +94,15 @@ copy_w(struct selector_key *key);
 static const struct state_definition client_statbl[] = 
 {
     {
-        .state = CONNECTING,
+        .state = RESOLVE_ORIGIN,
 
     },
     {
-        .state = RESOLVING,
+        .state = CONNECT,
+        .on_write_ready = connection_ready,
+    },
+    {
+        .state = GREETING,
     },
     {
         .state = COPY,
@@ -144,7 +150,7 @@ new_connection(int client_fd)
         con->origin.origin_fd = -1;
         con->client.client_fd = client_fd;
 
-        con->stm    .initial = CONNECTING;
+        con->stm    .initial = RESOLVE_ORIGIN;
         con->stm    .max_state = PERROR;
         con->stm    .states = proxy_describe_states();
         stm_init(&con->stm);
@@ -238,6 +244,14 @@ fail:
     }
 }
 
+static unsigned connection_ready(struct selector_key  *key) 
+{
+
+}    
+
+
+
+
 void
 proxy_tcp_connection(struct selector_key *key){
     struct sockaddr_storage       client_addr;
@@ -264,9 +278,9 @@ proxy_tcp_connection(struct selector_key *key){
 
     // Falta ver todo lo de la STM en struct connection
 
-    // if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
-    //     goto fail;
-    // }
+    if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
+        goto fail;
+    }
 
     origin_connection(key);
     
