@@ -24,13 +24,15 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <assert.h>
+#include <arpa/inet.h>
 
 #include "buffer.h"
 #include "args.h"
 #include "stm.h"
+#include "../../src/include/logger.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
-#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
+
 
 static enum proxy_states origin_connect(struct selector_key * key);
 
@@ -86,6 +88,9 @@ struct connection
     struct state_machine stm;
 };
 
+#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
+
+
 static void
 copy_init(const unsigned state, struct selector_key *key);
 
@@ -132,6 +137,101 @@ proxy_describe_states(void)
 {
    return client_statbl;
 };
+
+//---------------------------------------------------------------------------------------
+
+
+
+//       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
+
+
+//------------------------------------------------------------------------------------------
+
+static void proxy_read   (struct selector_key *key);
+static void proxy_write  (struct selector_key *key);
+static void proxy_block  (struct selector_key *key);
+static void proxy_close  (struct selector_key *key);
+static void proxy_done  (struct selector_key *key);
+static const struct fd_handler proxy_handler = {
+    .handle_read   = proxy_read,
+    .handle_write  = proxy_write,
+    .handle_close  = proxy_close,
+    .handle_block  = proxy_block,
+};
+
+static void proxy_read(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_read(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+       proxy_done(key);
+    }
+}
+
+static void proxy_write(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_write(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+       proxy_done(key);
+    }
+}
+
+
+static void proxy_block(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_block(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+        proxy_done(key);
+    }
+}
+static void
+
+proxy_close(struct selector_key *key) {
+
+//   proxy_destroy(ATTACHMENT(key));
+
+}
+
+
+static void
+
+proxy_done(struct selector_key* key) {
+
+  const int fds[] = {
+
+    ATTACHMENT(key)->client.client_fd,
+
+    ATTACHMENT(key)->origin.origin_fd,
+
+  };
+
+  for(unsigned i = 0; i < N(fds); i++) {
+
+    if(fds[i] != -1) {
+
+      if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
+
+        abort();
+
+      }
+
+      close(fds[i]);
+
+    }
+
+  }
+}
+// FALTA IMPLEMENTAR DESTROYERS
+
+
 
 
 //---------------------------------------------------------------------------------------
@@ -262,7 +362,7 @@ static enum proxy_states origin_connect(struct selector_key * key) {
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         perror("socket() failed");
-        return ERROR;
+        return PERROR;
     }
 
     if (selector_fd_set_nio(sock) == -1) {
@@ -298,7 +398,7 @@ static enum proxy_states origin_connect(struct selector_key * key) {
     return stm_next_status;
 
     error:
-    stm_next_status = ERROR;
+    stm_next_status = PERROR;
     log(ERROR, "origin server connection.");
     if (sock != -1) {
         close(sock);
@@ -337,6 +437,12 @@ proxy_tcp_connection(struct selector_key *key){
     if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
         goto fail;
     }
+
+    if(inet_pton(AF_INET, opt.origin_server, &(((struct sockaddr_in *)(&ATTACHMENT(key)->origin.origin_addr))->sin_addr))<=0)
+	{
+		goto fail;
+	}
+    ATTACHMENT(key)->origin.origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
 
     origin_connect(key);
     
@@ -438,98 +544,6 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 }
 
 
-//---------------------------------------------------------------------------------------
-
-
-
-//       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
-
-
-//------------------------------------------------------------------------------------------
-
-static void proxy_read   (struct selector_key *key);
-static void proxy_write  (struct selector_key *key);
-static void proxy_block  (struct selector_key *key);
-static void proxy_close  (struct selector_key *key);
-static void proxy_done  (struct selector_key *key);
-static const struct fd_handler proxy_handler = {
-    .handle_read   = proxy_read,
-    .handle_write  = proxy_write,
-    .handle_close  = proxy_close,
-    .handle_block  = proxy_block,
-};
-
-static void proxy_read(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_read(stm,key);
-
-    if (PERROR == st || DONE == st)
-    {
-       proxy_done(key);
-    }
-}
-
-static void proxy_write(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_write(stm,key);
-
-    if (PERROR == st || DONE == st)
-    {
-       proxy_done(key);
-    }
-}
-
-
-static void proxy_block(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_block(stm,key);
-
-    if (PERROR == st || DONE == st)
-    {
-        proxy_done(key);
-    }
-}
-static void
-
-proxy_close(struct selector_key *key) {
-
-//   proxy_destroy(ATTACHMENT(key));
-
-}
-
-
-static void
-
-proxy_done(struct selector_key* key) {
-
-  const int fds[] = {
-
-    ATTACHMENT(key)->client.client_fd,
-
-    ATTACHMENT(key)->origin.origin_fd,
-
-  };
-
-  for(unsigned i = 0; i < N(fds); i++) {
-
-    if(fds[i] != -1) {
-
-      if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-
-        abort();
-
-      }
-
-      close(fds[i]);
-
-    }
-
-  }
-}
-// FALTA IMPLEMENTAR DESTROYERS
 
 
 //-----------------------------------------------------------------------------------------------------------------
