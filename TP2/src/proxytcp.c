@@ -168,88 +168,88 @@ new_connection(int client_fd)
     return con;
 }
 
-void
-origin_connection(struct selector_key *key)
-{
-    int origin = 0, valread;
-    struct sockaddr_in serv_addr;
-    char *hello = "Hello from client";
-    char buffer[1024] = {0};
-    if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        goto fail;
-    }
-    if(selector_fd_set_nio(origin) == -1) {
-        goto fail;
-    }
-
-
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(opt.origin_port);
-
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0)
-    {
-        goto fail;
-    }
-
-    if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        if(errno == EINPROGRESS) {
-
-      // es esperable, tenemos que esperar a la conexión
-
-
-      // dejamos de de pollear el socket del cliente
-
-      selector_status st = selector_set_interest_key(key, OP_NOOP);
-
-      if(SELECTOR_SUCCESS != st) {
-
-
-
-        //goto fail;
-
-      }
-
-
-      // esperamos la conexion en el nuevo socket
-
-      st = selector_register(key->s, origin, NULL,
-
-                   OP_WRITE, NULL);
-
-      if(SELECTOR_SUCCESS != st) {
-
-
-
-        //goto fail;
-
-      }
-
-
-
-    } else {
-
-
-
-      //goto fail;
-
-    }
-
-    }
-    send(origin , hello , strlen(hello) , 0 );
-    printf("Hello message sent\n");
-    valread = read( origin , buffer, 1024);
-    printf("%s\n",buffer );
-    return;
-
-fail:
-    if(origin != -1) {
-        close(origin);
-    }
-}
+//void
+//origin_connection(struct selector_key *key)
+//{
+//    int origin = 0, valread;
+//    struct sockaddr_in serv_addr;
+//    char *hello = "Hello from client";
+//    char buffer[1024] = {0};
+//    if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+//    {
+//        goto fail;
+//    }
+//    if(selector_fd_set_nio(origin) == -1) {
+//        goto fail;
+//    }
+//
+//
+//
+//    serv_addr.sin_family = AF_INET;
+//    serv_addr.sin_port = htons(opt.origin_port);
+//
+//    // Convert IPv4 and IPv6 addresses from text to binary form
+//    if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0)
+//    {
+//        goto fail;
+//    }
+//
+//    if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+//    {
+//        if(errno == EINPROGRESS) {
+//
+//      // es esperable, tenemos que esperar a la conexión
+//
+//
+//      // dejamos de de pollear el socket del cliente
+//
+//      selector_status st = selector_set_interest_key(key, OP_NOOP);
+//
+//      if(SELECTOR_SUCCESS != st) {
+//
+//
+//
+//        //goto fail;
+//
+//      }
+//
+//
+//      // esperamos la conexion en el nuevo socket
+//
+//      st = selector_register(key->s, origin, NULL,
+//
+//                   OP_WRITE, NULL);
+//
+//      if(SELECTOR_SUCCESS != st) {
+//
+//
+//
+//        //goto fail;
+//
+//      }
+//
+//
+//
+//    } else {
+//
+//
+//
+//      //goto fail;
+//
+//    }
+//
+//    }
+//    send(origin , hello , strlen(hello) , 0 );
+//    printf("Hello message sent\n");
+//    valread = read( origin , buffer, 1024);
+//    printf("%s\n",buffer );
+//    return;
+//
+//fail:
+//    if(origin != -1) {
+//        close(origin);
+//    }
+//}
 
 static unsigned connection_ready(struct selector_key  *key) 
 {
@@ -270,8 +270,8 @@ static enum proxy_states origin_connect(struct selector_key * key) {
     }
 
     if (connect(sock,
-                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
-                ATTACHMENT(key)->origin_addr_len
+                (const struct sockaddr *)&ATTACHMENT(key)->origin.origin_addr,
+                ATTACHMENT(key)->origin.origin_addr_len
     ) == -1
             ) {
         if (errno == EINPROGRESS) {
@@ -280,7 +280,7 @@ static enum proxy_states origin_connect(struct selector_key * key) {
 //                goto error;
 //            }
 
-            st = selector_register(key->s, sock, &proxy_handler, OP_WRITE, key->data);
+        	selector_status st = selector_register(key->s, sock, &proxy_handler, OP_WRITE, key->data);
             if (SELECTOR_SUCCESS != st) {
                 goto error;
             }
