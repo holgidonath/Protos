@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/types.h>   // socket
 #include <sys/socket.h>  // socket
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <assert.h>
@@ -33,7 +34,16 @@
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
+typedef enum address_type {
+    ADDR_IPV4   = 0x01,
+    ADDR_IPV6   = 0x02,
+    ADDR_DOMAIN = 0x03,
+} address_type;
 
+typedef union address {
+    char                    fqdn[0xFF];
+    struct sockaddr_storage addrStorage;
+} address;
 
 struct opt opt;
 
@@ -69,11 +79,14 @@ typedef struct client
 typedef struct origin 
 {
     int origin_fd;
-    struct sockaddr_storage origin_addr;
+    uint16_t origin_port;
+    address origin_addr;
+    address_type origin_domain;
     socklen_t origin_addr_len;
     struct addrinfo *origin_resolution;
     struct addrinfo *origin_resolution_current;
     struct copy copy;
+
 
 
 } origin;
@@ -85,6 +98,7 @@ struct connection
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     struct state_machine stm;
+    struct connection * next;
 };
 static unsigned origin_connect(struct selector_key * key, struct connection * con);
 
@@ -107,11 +121,12 @@ static const struct state_definition client_statbl[] =
 {
     {
         .state = RESOLVE_ORIGIN,
+        .on_block_ready = resolve_done,
+
 
     },
     {
         .state = CONNECT,
-//		.on_arrival = connection_ready,
         .on_write_ready = connection_ready,
 
     },
@@ -360,7 +375,7 @@ static unsigned connection_ready(struct selector_key  *key)
 }
 
 static unsigned origin_connect(struct selector_key * key, struct connection * con) {
-    enum proxy_states stm_next_status = COPY;
+    enum proxy_states stm_next_status = CONNECT;
 
     con->origin.origin_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (con->origin.origin_fd < 0) {
@@ -418,7 +433,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
         close(con->origin.origin_fd);
     }
 
-    return stm_next_status;
+    return CONNECT;
 }
 
 
@@ -459,7 +474,9 @@ proxy_tcp_connection(struct selector_key *key){
 //	}
 //    ATTACHMENT(key)->origin.origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
 
-    //TODO: habria que hacer algo con lo que retorna esa funcion para la stm
+    //TODO: HABRIA QUE CHEQUEAR SI IR A RESOLV_BLOCK O NO
+    //TODO: HABRIA QUE ASIGNAR BIEN ESTRUCTURA CONNECTION
+    //TODO: HABRIA QUE VER ESTADO INICIAL REQUEST_RESOLV Y MANEJO DE ESTADOS
     origin_connect(key, connection);
     
     //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
@@ -559,6 +576,58 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     return server;
 }
 
+
+//-----------------------------------------------------------------------------------------------------------------
+
+
+//                                          RESOLVE_ORIGIN FUNCTIONS
+
+
+//----------------------------------------------------------------------------------------------------------------
+
+static void * resolve_blocking(void * data) {
+    struct selector_key  *key = (struct selector_key *) data;
+    struct connection * connection = ATTACHMENT(key);
+
+    pthread_detach(pthread_self());
+    connection->origin.origin_resolution = 0;
+    struct addrinfo hints = {
+        .ai_family    = AF_UNSPEC,    
+        /** Permite IPv4 o IPv6. */
+        .ai_socktype  = SOCK_STREAM,  
+        .ai_flags     = AI_PASSIVE,   
+        .ai_protocol  = 0,        
+        .ai_canonname = NULL,
+        .ai_addr      = NULL,
+        .ai_next      = NULL,
+    };
+
+    char buff[7];
+    snprintf(buff, sizeof(buff), "%d", connection->origin.origin_port);
+    getaddrinfo(connection->origin.origin_addr.fqdn, buff, &hints, &connection->origin.origin_resolution);
+    notifyBlock(key->s, key->fd);
+
+    free(data);
+    return 0;
+}
+
+
+static unsigned resolve_done(struct selector_key * key) {
+    struct connection * connection = ATTACHMENT(key);
+    if(connection->origin.origin_resolution != 0) {
+        connection->origin.origin_domain = connection->origin.origin_resolution->ai_family;
+        connection->origin.origin_addr_len = connection->origin.origin_resolution->ai_addrlen;
+        memcpy(&connection->origin.origin_addr,
+                connection->origin.origin_resolution->ai_addr,
+                connection->origin.origin_resolution->ai_addrlen);
+        freeaddrinfo(connection->origin.origin_resolution);
+        connection->origin.origin_resolution = 0;
+    } else {
+        // MANEJAR ERROR PARA RESOLVER FQDN
+    }
+
+    return origin_connect(key,connection);
+}
 
 
 
