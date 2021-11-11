@@ -582,6 +582,7 @@ copy_init(const unsigned state, struct selector_key *key)
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->origin.copy;
 
+    d			= &ATTACHMENT(key)->origin.copy;
     d->fd       = &ATTACHMENT(key)->origin.origin_fd;
     d->rb       = &ATTACHMENT(key)->write_buffer;
     d->wb       = &ATTACHMENT(key)->read_buffer;
@@ -628,7 +629,7 @@ static unsigned
 copy_r(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-
+    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -666,7 +667,7 @@ static unsigned
 copy_w(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-
+    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
