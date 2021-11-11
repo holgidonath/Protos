@@ -573,7 +573,7 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 static void
 copy_init(const unsigned state, struct selector_key *key)
 {
-	log(INFO, "llegamos a copy");
+	//log(INFO, "llegamos a copy");
     struct copy * d = &ATTACHMENT(key)->client.copy;
 
     d->fd       = &ATTACHMENT(key)->client.client_fd;
@@ -629,7 +629,7 @@ static unsigned
 copy_r(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -667,7 +667,7 @@ static unsigned
 copy_w(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
