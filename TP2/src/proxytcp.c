@@ -121,6 +121,43 @@ connection_ready(struct selector_key  *key);
 static unsigned 
 resolve_done(struct selector_key * key);
 
+static const struct state_definition client_statbl[] = 
+{
+    {
+        .state = RESOLVE_ORIGIN,
+        .on_block_ready = resolve_done,
+
+
+    },
+    {
+        .state = CONNECT,
+        .on_write_ready = connection_ready,
+
+    },
+    {
+        .state = GREETING,
+    },
+    {
+        .state = COPY,
+        .on_arrival = copy_init,
+        .on_read_ready = copy_r,
+        .on_write_ready = copy_w,
+    },
+    {
+        .state = DONE,
+    },
+    {
+        .state = PERROR,
+    },
+
+};
+
+
+static const struct state_definition *
+proxy_describe_states(void)
+{
+   return client_statbl;
+};
 
 void 
 set_origin_address(struct connection * connection, const char * adress) 
@@ -165,45 +202,6 @@ set_origin_address(struct connection * connection, const char * adress)
     memcpy(&connection->origin.origin_addr.addr_storage, &ipv4, connection->origin.origin_addr_len);
     return;
 }
-
-
-static const struct state_definition client_statbl[] = 
-{
-    {
-        .state = RESOLVE_ORIGIN,
-        .on_block_ready = resolve_done,
-
-
-    },
-    {
-        .state = CONNECT,
-        .on_write_ready = connection_ready,
-
-    },
-    {
-        .state = GREETING,
-    },
-    {
-        .state = COPY,
-        .on_arrival = copy_init,
-        .on_read_ready = copy_r,
-        .on_write_ready = copy_w,
-    },
-    {
-        .state = DONE,
-    },
-    {
-        .state = PERROR,
-    },
-
-};
-
-
-static const struct state_definition *
-proxy_describe_states(void)
-{
-   return client_statbl;
-};
 
 //---------------------------------------------------------------------------------------
 
@@ -420,7 +418,9 @@ new_connection(int client_fd)
 // }
 
 static unsigned connection_ready(struct selector_key  *key) 
+
 {
+    log(INFO, "origin sever connection success.");
 	return COPY;
 }
 
@@ -462,7 +462,6 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
     } else {
         abort();
     }
-    log(INFO, "origin sever connection success.");
 
     return stm_next_status;
 
@@ -473,7 +472,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
         close(con->origin.origin_fd);
     }
 
-    return CONNECT;
+    return stm_next_status;
 }
 
 
