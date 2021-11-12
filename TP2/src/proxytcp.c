@@ -42,7 +42,7 @@ typedef enum address_type {
 
 typedef union address {
     char                    fqdn[0xFF];
-    struct sockaddr_storage addrStorage;
+    struct sockaddr_storage addr_storage;
 } address;
 
 struct opt opt;
@@ -123,10 +123,10 @@ resolve_done(struct selector_key * key);
 
 
 void 
-set_origin_address(struct connection * connection, const char * strIP) 
+set_origin_address(struct connection * connection, const char * adress) 
 {
     
-    memset(&(connection->origin.origin_addr.addrStorage), 0, sizeof(connection->origin.origin_addr.addrStorage));
+    memset(&(connection->origin.origin_addr.addr_storage), 0, sizeof(connection->origin.origin_addr.addr_storage));
     
     connection->origin.origin_type = ADDR_IPV4;
     connection->origin.origin_domain  = AF_INET;
@@ -137,7 +137,7 @@ set_origin_address(struct connection * connection, const char * strIP)
     ipv4.sin_family = AF_INET;
     int result = 0;
 
-    if((result = inet_pton(AF_INET, strIP, &ipv4.sin_addr.s_addr)) <= 0) 
+    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0) 
     {
         connection->origin.origin_type   = ADDR_IPV6;
         connection->origin.origin_domain  = AF_INET6;
@@ -149,20 +149,20 @@ set_origin_address(struct connection * connection, const char * strIP)
 
         ipv6.sin6_family = AF_INET6;
 
-        if((result = inet_pton(AF_INET6, strIP, &ipv6.sin6_addr.s6_addr)) <= 0)
+        if((result = inet_pton(AF_INET6, adress, &ipv6.sin6_addr.s6_addr)) <= 0)
         {
-            memset(&(connection->origin.origin_addr.addrStorage), 0, sizeof(connection->origin.origin_addr.addrStorage));
+            memset(&(connection->origin.origin_addr.addr_storage), 0, sizeof(connection->origin.origin_addr.addr_storage));
             connection->origin.origin_type   = ADDR_DOMAIN;
-            memcpy(connection->origin.origin_addr.fqdn, strIP, strlen(strIP));
+            memcpy(connection->origin.origin_addr.fqdn, adress, strlen(adress));
             return;
         }
 
         ipv6.sin6_port = htons(opt.origin_port); 
-        memcpy(&connection->origin.origin_addr.addrStorage, &ipv6, connection->origin.origin_addr_len);    
+        memcpy(&connection->origin.origin_addr.addr_storage, &ipv6, connection->origin.origin_addr_len);    
         return;
     }    
     ipv4.sin_port = htons(opt.origin_port); 
-    memcpy(&connection->origin.origin_addr.addrStorage, &ipv4, connection->origin.origin_addr_len);
+    memcpy(&connection->origin.origin_addr.addr_storage, &ipv4, connection->origin.origin_addr_len);
     return;
 }
 
@@ -441,7 +441,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
 //                (const struct sockaddr *)&ATTACHMENT(key)->origin.origin_addr,
 //                ATTACHMENT(key)->origin.origin_addr_len
 //    ) == -1
-	if (connect(con->origin.origin_fd, (struct sockaddr *)&con->origin.origin_addr.addrStorage, con->origin.origin_addr_len) == -1
+	if (connect(con->origin.origin_fd, (struct sockaddr *)&con->origin.origin_addr.addr_storage, con->origin.origin_addr_len) == -1
             ) {
         if (errno == EINPROGRESS) {
 //            selector_status st = selector_set_interest_key(key, OP_NOOP);
