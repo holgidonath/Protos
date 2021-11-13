@@ -23,6 +23,7 @@
 #include "include/stm.h"
 #include "include/logger.h"
 #include "include/main.h"
+#include "include/util.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( ( struct connection * )(key)->data)
@@ -110,15 +111,20 @@ static unsigned
 connection_ready(struct selector_key  *key);
 
 static unsigned
+resolve_start(struct selector_key * key);
+
+static unsigned
 resolve_done(struct selector_key * key);
+
+static void *
+resolve_blocking(void * data);
 
 static const struct state_definition client_statbl[] = 
 {
     {
-        .state = RESOLVE_ORIGIN,
-        .on_block_ready = resolve_done,
-
-
+        .state            = RESOLVE_ORIGIN,
+        .on_write_ready   = resolve_start,
+        .on_block_ready   = resolve_done,
     },
     {
         .state = CONNECT,
@@ -573,14 +579,29 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                          RESOLVE_ORIGIN FUNCTIONS
-
-
 //----------------------------------------------------------------------------------------------------------------
+static unsigned
+resolve_start(struct selector_key *key) {
+    enum proxy_states stm_next_status = ERROR;
 
-static void * resolve_blocking(void * data) {
+    struct selector_key* new_key = safe_malloc(sizeof(*key));
+    memcpy(new_key, key, sizeof(*new_key));
+
+    pthread_t thread_id;
+    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) {
+        stm_next_status = RESOLVE_ORIGIN;
+        selector_set_interest_key(key, OP_NOOP);
+        pthread_join(thread_id, NULL);
+    } else {
+        log(ERROR, "function resolve_start, pthread_create error.");
+    }
+
+    return stm_next_status;
+}
+
+static void *
+resolve_blocking(void * data) {
     struct selector_key  *key = (struct selector_key *) data;
     struct connection * connection = ATTACHMENT(key);
 
@@ -599,15 +620,25 @@ static void * resolve_blocking(void * data) {
 
     char buff[7];
     snprintf(buff, sizeof(buff), "%d", connection->origin.origin_port);
-    getaddrinfo(connection->origin.origin_addr.fqdn, buff, &hints, &connection->origin.origin_resolution);
-    //notifyBlock(key->s, key->fd);
+
+    if( getaddrinfo(connection->origin.origin_addr.fqdn,
+                    buff,
+                    &hints,
+                    &connection->origin.origin_resolution
+                    ) != 0 ) {
+        log(INFO, "connection_resolve_blocking, couldn't resolve address");
+    }
+
+    // end of blocking task
+    selector_notify_block(key->s, key->fd);
 
     free(data);
     return 0;
 }
 
 
-static unsigned resolve_done(struct selector_key * key) {
+static unsigned
+resolve_done(struct selector_key * key) {
     struct connection * connection = ATTACHMENT(key);
     if(connection->origin.origin_resolution != 0) {
         connection->origin.origin_domain = connection->origin.origin_resolution->ai_family;
