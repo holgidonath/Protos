@@ -109,6 +109,9 @@ copy_w(struct selector_key *key);
 static unsigned
 connection_ready(struct selector_key  *key);
 
+static unsigned
+resolve_done(struct selector_key * key);
+
 static const struct state_definition client_statbl[] = 
 {
     {
@@ -597,7 +600,7 @@ static void * resolve_blocking(void * data) {
     char buff[7];
     snprintf(buff, sizeof(buff), "%d", connection->origin.origin_port);
     getaddrinfo(connection->origin.origin_addr.fqdn, buff, &hints, &connection->origin.origin_resolution);
-    notifyBlock(key->s, key->fd);
+    //notifyBlock(key->s, key->fd);
 
     free(data);
     return 0;
@@ -764,58 +767,29 @@ copy_w(struct selector_key *key)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                               MAIN
-
-
 //-----------------------------------------------------------------------------------------------------------------
 
-
-
-
 int
-main(const int argc, const char **argv) {
-    unsigned port = 1080;
+main(const int argc, char **argv) {
     appname = *argv;
     parse_options(argc, argv, &opt);
     /* print options just for debug */
-    printf("fstderr       = %s\n", opt.fstderr);
-    printf("local_port    = %d\n", opt.local_port); // local port to listen connections
-    printf("origin_port   = %d\n", opt.origin_port);
-    printf("mgmt_port     = %d\n", opt.mgmt_port);
-    printf("mgmt_addr     = %s\n", opt.mgmt_addr);
-    printf("pop3_addr     = %s\n", opt.pop3_addr);
-    printf("origin_server = %s\n", opt.origin_server); // listen to a specific interface
-    printf("cmd           = %s\n", opt.exec);
-    // if(argc == 1) {
-    //     // utilizamos el default
-    // } else if(argc == 2) {
-    //     char *end     = 0;
-    //     const long sl = strtol(argv[1], &end, 10);
+    log(INFO,"fstderr       = %s\n", opt.fstderr);
+    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
+    log(INFO,"origin_port   = %d\n", opt.origin_port);
+    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
+    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
+    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
+    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
+    log(INFO,"cmd           = %s\n", opt.exec);
 
-    //     if (end == argv[1]|| '\0' != *end 
-    //        || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-    //        || sl < 0 || sl > USHRT_MAX) {
-    //         fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-    //         return 1;
-    //     }
-    //     port = sl;
-    // } else {
-    //     fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-    //     return 1;
-    // }
-
-    // no tenemos nada que leer de stdin
     close(0);
 
-    
     const char       *err_msg = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
-
-  
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
 
@@ -826,7 +800,6 @@ main(const int argc, const char **argv) {
     {
         goto finally;
     }
-
 
     // registrar sigterm es útil para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
