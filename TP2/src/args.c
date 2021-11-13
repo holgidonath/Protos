@@ -6,8 +6,8 @@
 #include <getopt.h>
 #include <assert.h>
 
-#include "args.h"
-#include "../../src/include/logger.h"
+#include "include/args.h"
+#include "include/logger.h"
 
 static unsigned short
 port(const char *s) {
@@ -55,25 +55,33 @@ help() {
             "-e <error-file>\n"
             "    Set error file to redirec stderr.\n"
             "    Default is /dev/null\n"
+            "\n"
             "-h\n"
             "    Prints help\n"
+            "\n"
             "-l <pop3-address>\n"
             "    Set proxy address.\n"
             "    Default listening at all interfaces\n"
+            "\n"
             "-L <management-address>\n"
             "    Set management service address.\n"
             "    Default using loopback\n"
+            "\n"
             "-o <management-port>\n"
             "    Set port for management service.\n"
             "    Default is 9090\n"
+            "\n"
             "-p <local-port>\n"
             "    TCP port for incoming POP3 connections\n"
             "    Default is 1110\n"
+            "\n"
             "-P <origin-port>\n"
             "    TCP origin port for POP3 origin server\n"
             "    Default is 110\n"
+            "\n"
             "-t <cmd>\n"
             "    Command for extern filters.\n"
+            "\n"
             "-v\n"
             "    Prints version related information\n"
             "\n"
@@ -96,7 +104,7 @@ usage(){
 }
 
 void
-parseOptions(int argc, char **argv, struct opt * opt) {
+parse_options(int argc, char **argv, struct opt * opt) {
     /* Setting default values  */
     assert(argv && opt);
     memset(opt, 0, sizeof(*opt));

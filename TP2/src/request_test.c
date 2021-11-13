@@ -3,7 +3,7 @@
 #include <check.h>
 
 #include "request.h"
-#include "tests.h"
+#include "test/tests.h"
 
 #define FIXBUF(b, data) buffer_init(&(b), N(data), (data)); \
                         buffer_write_adv(&(b), N(data))

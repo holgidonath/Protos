@@ -7,7 +7,7 @@
 
 
 /* Read and set cmd line options POSIX style */
-void parseOptions(int argc, char **argv, struct opt *opt);
+void parse_options(int argc, char **argv, struct opt *opt);
 
 /* Display help */
 void help();

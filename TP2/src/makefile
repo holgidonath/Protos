@@ -1,11 +1,16 @@
 PROXY_NAME = pop3filter
-PROXY_SOURCES = proxytcp buffer args selector stm ../../src/logger
+PROXY_SOURCES = proxytcp buffer args selector stm util
+LIBS =  logger
 CC_C = gcc
 PTHREADFLAG = -pthread
+CFLAGS = -Wall -fsanitize=address -g
 
 all: proxy-server
 
-proxy-server:
-	$(CC_C) -g $(PROXY_SOURCES:=.c) -o $(PROXY_NAME) $(PTHREADFLAG)
+clean:
+	- rm -f *.o  pop3filter
 
-.PHONY: all
+proxy-server:
+	$(CC_C) $(CFLAGS) $(PROXY_SOURCES:=.c) $(LIBS:=.c) -o $(PROXY_NAME) $(PTHREADFLAG)
+
+.PHONY: clean all

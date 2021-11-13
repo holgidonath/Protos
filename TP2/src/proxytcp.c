@@ -1,14 +1,5 @@
 /**
- * main.c - servidor proxy socks concurrente
- *
- * Interpreta los argumentos de línea de comandos, y monta un socket
- * pasivo.
- *
- * Todas las conexiones entrantes se manejarán en éste hilo.
- *
- * Se descargará en otro hilos las operaciones bloqueantes (resolución de
- * DNS utilizando getaddrinfo), pero toda esa complejidad está oculta en
- * el selector.
+
  */
 
 #include <stdio.h>
@@ -26,13 +17,17 @@
 #include <netinet/tcp.h>
 #include <assert.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
-#include "buffer.h"
-#include "args.h"
-#include "stm.h"
-#include "../../src/include/logger.h"
+#include "include/buffer.h"
+#include "include/args.h"
+#include "include/stm.h"
+#include "include/logger.h"
+#include "include/main.h"
+#include "include/util.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
+#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
@@ -46,6 +41,7 @@ typedef union address {
 } address;
 
 struct opt opt;
+const char *appname;
 
 enum proxy_states
 {
@@ -71,7 +67,7 @@ typedef struct client
 {
 
     int client_fd;
-    struct copy copy;
+    struct copy copy_client;
 
 
 } client;
@@ -94,16 +90,23 @@ typedef struct origin
 
 struct connection 
 {
-    client client;
-    origin origin;
+    int client_fd;
+    struct copy copy_client;
+    int origin_fd;
+    uint16_t origin_port;
+    address origin_addr;
+    address_type origin_type;
+    int origin_domain;
+    socklen_t origin_addr_len;
+    struct addrinfo *origin_resolution;
+    struct addrinfo *origin_resolution_current;
+    struct copy copy_origin;
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     struct state_machine stm;
     struct connection * next;
 };
 static unsigned origin_connect(struct selector_key * key, struct connection * con);
-
-#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
 
 static void
@@ -118,16 +121,21 @@ copy_w(struct selector_key *key);
 static unsigned
 connection_ready(struct selector_key  *key);
 
-static unsigned 
+static unsigned
+resolve_start(struct selector_key * key);
+
+static unsigned
 resolve_done(struct selector_key * key);
+
+static void *
+resolve_blocking(void * data);
 
 static const struct state_definition client_statbl[] = 
 {
     {
-        .state = RESOLVE_ORIGIN,
-        .on_block_ready = resolve_done,
-
-
+        .state            = RESOLVE_ORIGIN,
+        // .on_write_ready   = resolve_start,
+        .on_block_ready   = resolve_done,
     },
     {
         .state = CONNECT,
@@ -163,11 +171,11 @@ void
 set_origin_address(struct connection * connection, const char * adress) 
 {
     
-    memset(&(connection->origin.origin_addr.addr_storage), 0, sizeof(connection->origin.origin_addr.addr_storage));
+    memset(&(connection->origin_addr.addr_storage), 0, sizeof(connection->origin_addr.addr_storage));
     
-    connection->origin.origin_type = ADDR_IPV4;
-    connection->origin.origin_domain  = AF_INET;
-    connection->origin.origin_addr_len = sizeof(struct sockaddr_in);
+    connection->origin_type = ADDR_IPV4;
+    connection->origin_domain  = AF_INET;
+    connection->origin_addr_len = sizeof(struct sockaddr_in);
 
     struct sockaddr_in ipv4; 
     memset(&(ipv4), 0, sizeof(ipv4));
@@ -176,9 +184,9 @@ set_origin_address(struct connection * connection, const char * adress)
 
     if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0) 
     {
-        connection->origin.origin_type   = ADDR_IPV6;
-        connection->origin.origin_domain  = AF_INET6;
-        connection->origin.origin_addr_len = sizeof(struct sockaddr_in6);
+        connection->origin_type   = ADDR_IPV6;
+        connection->origin_domain  = AF_INET6;
+        connection->origin_addr_len = sizeof(struct sockaddr_in6);
 
         struct sockaddr_in6 ipv6; 
 
@@ -188,18 +196,18 @@ set_origin_address(struct connection * connection, const char * adress)
 
         if((result = inet_pton(AF_INET6, adress, &ipv6.sin6_addr.s6_addr)) <= 0)
         {
-            memset(&(connection->origin.origin_addr.addr_storage), 0, sizeof(connection->origin.origin_addr.addr_storage));
-            connection->origin.origin_type   = ADDR_DOMAIN;
-            memcpy(connection->origin.origin_addr.fqdn, adress, strlen(adress));
+            memset(&(connection->origin_addr.addr_storage), 0, sizeof(connection->origin_addr.addr_storage));
+            connection->origin_type   = ADDR_DOMAIN;
+            memcpy(connection->origin_addr.fqdn, adress, strlen(adress));
             return;
         }
 
         ipv6.sin6_port = htons(opt.origin_port); 
-        memcpy(&connection->origin.origin_addr.addr_storage, &ipv6, connection->origin.origin_addr_len);    
+        memcpy(&connection->origin_addr.addr_storage, &ipv6, connection->origin_addr_len);    
         return;
     }    
     ipv4.sin_port = htons(opt.origin_port); 
-    memcpy(&connection->origin.origin_addr.addr_storage, &ipv4, connection->origin.origin_addr_len);
+    memcpy(&connection->origin_addr.addr_storage, &ipv4, connection->origin_addr_len);
     return;
 }
 
@@ -272,9 +280,9 @@ proxy_done(struct selector_key* key) {
 
   const int fds[] = {
 
-    ATTACHMENT(key)->client.client_fd,
+    ATTACHMENT(key)->client_fd,
 
-    ATTACHMENT(key)->origin.origin_fd,
+    ATTACHMENT(key)->origin_fd,
 
   };
 
@@ -319,8 +327,8 @@ new_connection(int client_fd)
     {
         memset(con, 0x00, sizeof(*con));
         
-        con->origin.origin_fd = -1;
-        con->client.client_fd = client_fd;
+        con->origin_fd = -1;
+        con->client_fd = client_fd;
 
         con->stm    .initial = RESOLVE_ORIGIN;
         con->stm    .max_state = PERROR;
@@ -427,28 +435,28 @@ static unsigned connection_ready(struct selector_key  *key)
 static unsigned origin_connect(struct selector_key * key, struct connection * con) {
     enum proxy_states stm_next_status = CONNECT;
 
-    con->origin.origin_fd = socket(con->origin.origin_domain, SOCK_STREAM, 0);
-    if (con->origin.origin_fd < 0) {
+    con->origin_fd = socket(con->origin_domain, SOCK_STREAM, 0);
+    if (con->origin_fd < 0) {
         perror("socket() failed");
         return PERROR;
     }
    
-    if (selector_fd_set_nio(con->origin.origin_fd) == -1) {
+    if (selector_fd_set_nio(con->origin_fd) == -1) {
         goto error;
     }
 
 //    if (connect(sock,
-//                (const struct sockaddr *)&ATTACHMENT(key)->origin.origin_addr,
-//                ATTACHMENT(key)->origin.origin_addr_len
+//                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
+//                ATTACHMENT(key)->origin_addr_len
 //    ) == -1
-	if (connect(con->origin.origin_fd, (struct sockaddr *)&con->origin.origin_addr.addr_storage, con->origin.origin_addr_len) == -1
+	if (connect(con->origin_fd, (struct sockaddr *)&con->origin_addr.addr_storage, con->origin_addr_len) == -1
             ) {
         if (errno == EINPROGRESS) {
 //            selector_status st = selector_set_interest_key(key, OP_NOOP);
 //            if (SELECTOR_SUCCESS != st) {
 //                goto error;
 //            }
-        	selector_status st = selector_register(key->s, con->origin.origin_fd, &proxy_handler, OP_WRITE, con);
+        	selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
             if (SELECTOR_SUCCESS != st) {
                 goto error;
             }
@@ -468,8 +476,8 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
     error:
     stm_next_status = PERROR;
     log(ERROR, "origin server connection.");
-    if (con->origin.origin_fd != -1) {
-        close(con->origin.origin_fd);
+    if (con->origin_fd != -1) {
+        close(con->origin_fd);
     }
 
     return stm_next_status;
@@ -477,9 +485,11 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
 
 
 void
-proxy_tcp_connection(struct selector_key *key){
+proxy_tcp_connection(struct selector_key *key)
+{
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len = sizeof(client_addr);
+    pthread_t thread_id;
    
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
@@ -507,30 +517,47 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
 //		TODO: falta guardarse en la estructura origin los datos del sv a conectarse
-//    if(inet_pton(AF_INET, opt.origin_server, &(((struct sockaddr_in *)(&ATTACHMENT(key)->origin.origin_addr))->sin_addr))<=0)
+//    if(inet_pton(AF_INET, opt.origin_server, &(((struct sockaddr_in *)(&ATTACHMENT(key)->origin_addr))->sin_addr))<=0)
 //	{
 //		goto fail;
 //	}
-//    ATTACHMENT(key)->origin.origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
+//    ATTACHMENT(key)->origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
 
     //TODO: HABRIA QUE CHEQUEAR SI IR A RESOLV_BLOCK O NO
     //TODO: HABRIA QUE ASIGNAR BIEN ESTRUCTURA CONNECTION
     //TODO: HABRIA QUE VER ESTADO INICIAL REQUEST_RESOLV Y MANEJO DE ESTADOS
 
     set_origin_address(connection, opt.origin_server);
-    printf("%d",  connection->origin.origin_domain);
 
-    if (connection->origin.origin_type != ADDR_DOMAIN)
+
+    if (connection->origin_type != ADDR_DOMAIN)
     {
         connection->stm.initial = origin_connect(key, connection);
     }
 
     else
     {
-        //RESOLV BLOQUEANTE
+
+    struct selector_key* new_key = malloc(sizeof(*key));
+    // memcpy(new_key, key, sizeof(*new_key));
+
+    new_key->s = key->s;
+    new_key->fd = key->fd;
+    new_key->data = key->data;
+
+    
+    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) 
+    {
+        
+        selector_set_interest_key(key, OP_NOOP);
+        pthread_join(thread_id, NULL);
+    } else 
+    {
+        log(ERROR, "function resolve_start, pthread_create error.");
+    }
     }
     
-    //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
+    // log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
     return ;
 
 fail:
@@ -629,20 +656,34 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                          RESOLVE_ORIGIN FUNCTIONS
-
-
 //----------------------------------------------------------------------------------------------------------------
+static unsigned
+resolve_start(struct selector_key *key) {
+    enum proxy_states stm_next_status = ERROR;
 
-static void * resolve_blocking(void * data) 
-{
+    struct selector_key* new_key = safe_malloc(sizeof(*key));
+    memcpy(new_key, key, sizeof(*new_key));
+
+    pthread_t thread_id;
+    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) {
+        stm_next_status = RESOLVE_ORIGIN;
+        selector_set_interest_key(key, OP_NOOP);
+        pthread_join(thread_id, NULL);
+    } else {
+        log(ERROR, "function resolve_start, pthread_create error.");
+    }
+
+    return stm_next_status;
+}
+
+static void *
+resolve_blocking(void * data) {
     struct selector_key  *key = (struct selector_key *) data;
     struct connection * connection = ATTACHMENT(key);
 
     pthread_detach(pthread_self());
-    connection->origin.origin_resolution = 0;
+    connection->origin_resolution = 0;
     struct addrinfo hints = {
         .ai_family    = AF_UNSPEC,    
         /** Permite IPv4 o IPv6. */
@@ -655,8 +696,18 @@ static void * resolve_blocking(void * data)
     };
 
     char buff[7];
-    snprintf(buff, sizeof(buff), "%d", connection->origin.origin_port);
-    getaddrinfo(connection->origin.origin_addr.fqdn, buff, &hints, &connection->origin.origin_resolution);
+    snprintf(buff, sizeof(buff), "%d", connection->origin_port);
+
+    if( getaddrinfo(connection->origin_addr.fqdn,
+                    buff,
+                    &hints,
+                    &connection->origin_resolution
+                    ) != 0 ) 
+    {
+        log(INFO, "connection_resolve_blocking, couldn't resolve address");
+    }
+
+    // end of blocking task
     selector_notify_block(key->s, key->fd);
 
     free(data);
@@ -664,18 +715,21 @@ static void * resolve_blocking(void * data)
 }
 
 
-static unsigned resolve_done(struct selector_key * key) 
+static unsigned
+resolve_done(struct selector_key * key) 
 {
     struct connection * connection = ATTACHMENT(key);
-    if(connection->origin.origin_resolution != 0) {
-        connection->origin.origin_domain = connection->origin.origin_resolution->ai_family;
-        connection->origin.origin_addr_len = connection->origin.origin_resolution->ai_addrlen;
-        memcpy(&connection->origin.origin_addr,
-                connection->origin.origin_resolution->ai_addr,
-                connection->origin.origin_resolution->ai_addrlen);
-        freeaddrinfo(connection->origin.origin_resolution);
-        connection->origin.origin_resolution = 0;
-    } else {
+    if(connection->origin_resolution != 0) 
+    {
+        connection->origin_domain = connection->origin_resolution->ai_family;
+        connection->origin_addr_len = connection->origin_resolution->ai_addrlen;
+        memcpy(&connection->origin_addr,
+                connection->origin_resolution->ai_addr,
+                connection->origin_resolution->ai_addrlen);
+        freeaddrinfo(connection->origin_resolution);
+        connection->origin_resolution = 0;
+    } else 
+    {
         // MANEJAR ERROR PARA RESOLVER FQDN
     }
 
@@ -696,20 +750,20 @@ static void
 copy_init(const unsigned state, struct selector_key *key)
 {
 	//log(INFO, "llegamos a copy");
-    struct copy * d = &ATTACHMENT(key)->client.copy;
+    struct copy * d = &ATTACHMENT(key)->copy_client;
 
-    d->fd       = &ATTACHMENT(key)->client.client_fd;
+    d->fd       = &ATTACHMENT(key)->client_fd;
     d->rb       = &ATTACHMENT(key)->read_buffer;
     d->wb       = &ATTACHMENT(key)->write_buffer;
     d->duplex   = OP_READ | OP_WRITE;
-    d->other    = &ATTACHMENT(key)->origin.copy;
+    d->other    = &ATTACHMENT(key)->copy_origin;
 
-    d			= &ATTACHMENT(key)->origin.copy;
-    d->fd       = &ATTACHMENT(key)->origin.origin_fd;
+    d			= &ATTACHMENT(key)->copy_origin;
+    d->fd       = &ATTACHMENT(key)->origin_fd;
     d->rb       = &ATTACHMENT(key)->write_buffer;
     d->wb       = &ATTACHMENT(key)->read_buffer;
     d->duplex   = OP_READ | OP_WRITE;
-    d->other    = &ATTACHMENT(key)->client.copy;
+    d->other    = &ATTACHMENT(key)->copy_client;
 }
 
 static fd_interest
@@ -734,7 +788,7 @@ copy_compute_interests(fd_selector s, struct  copy* d)
 static struct copy *
 copy_ptr(struct selector_key * key)
 {
-    struct copy *d = &ATTACHMENT(key)->client.copy;
+    struct copy *d = &ATTACHMENT(key)->copy_client;
 
     if(*d->fd == key->fd)
     {
@@ -825,48 +879,29 @@ copy_w(struct selector_key *key)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                               MAIN
-
-
 //-----------------------------------------------------------------------------------------------------------------
 
-
-
-
 int
-main(const int argc, const char **argv) {
-    unsigned port = 1080;
-    parseOptions(argc, argv, &opt);
-    // if(argc == 1) {
-    //     // utilizamos el default
-    // } else if(argc == 2) {
-    //     char *end     = 0;
-    //     const long sl = strtol(argv[1], &end, 10);
+main(const int argc, char **argv) {
+    appname = *argv;
+    parse_options(argc, argv, &opt);
+    /* print options just for debug */
+    log(INFO,"fstderr       = %s\n", opt.fstderr);
+    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
+    log(INFO,"origin_port   = %d\n", opt.origin_port);
+    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
+    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
+    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
+    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
+    log(INFO,"cmd           = %s\n", opt.exec);
 
-    //     if (end == argv[1]|| '\0' != *end 
-    //        || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-    //        || sl < 0 || sl > USHRT_MAX) {
-    //         fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-    //         return 1;
-    //     }
-    //     port = sl;
-    // } else {
-    //     fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-    //     return 1;
-    // }
-
-    // no tenemos nada que leer de stdin
     close(0);
 
-    
     const char       *err_msg = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
-
-  
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
 
@@ -877,7 +912,6 @@ main(const int argc, const char **argv) {
     {
         goto finally;
     }
-
 
     // registrar sigterm es útil para terminar el programa normalmente.
     // esto ayuda mucho en herramientas como valgrind.
