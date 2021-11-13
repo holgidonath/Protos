@@ -60,3 +60,7 @@ out/
 
 # VScODE
 .vscode/
+
+# CMake
+cmake-build-*/
+pop3filter
