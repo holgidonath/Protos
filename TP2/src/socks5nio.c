@@ -14,10 +14,10 @@
 
 #include "hello.h"
 #include "request.h"
-#include "buffer.h"
+#include "include/buffer.h"
 
-#include "stm.h"
-#include"netutils.h"
+#include "include/stm.h"
+#include"include/netutils.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 

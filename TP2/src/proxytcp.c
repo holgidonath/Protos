@@ -1,14 +1,5 @@
 /**
- * main.c - servidor proxy socks concurrente
- *
- * Interpreta los argumentos de línea de comandos, y monta un socket
- * pasivo.
- *
- * Todas las conexiones entrantes se manejarán en éste hilo.
- *
- * Se descargará en otro hilos las operaciones bloqueantes (resolución de
- * DNS utilizando getaddrinfo), pero toda esa complejidad está oculta en
- * el selector.
+
  */
 
 #include <stdio.h>
@@ -27,12 +18,14 @@
 #include <assert.h>
 #include <arpa/inet.h>
 
-#include "buffer.h"
-#include "args.h"
-#include "stm.h"
-#include "../../src/include/logger.h"
+#include "include/buffer.h"
+#include "include/args.h"
+#include "include/stm.h"
+#include "include/logger.h"
+#include "include/main.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
+#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
@@ -46,6 +39,7 @@ typedef union address {
 } address;
 
 struct opt opt;
+const char *appname;
 
 enum proxy_states
 {
@@ -101,8 +95,6 @@ struct connection
     struct connection * next;
 };
 static unsigned origin_connect(struct selector_key * key, struct connection * con);
-
-#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
 
 static void
@@ -785,7 +777,17 @@ copy_w(struct selector_key *key)
 int
 main(const int argc, const char **argv) {
     unsigned port = 1080;
-    parseOptions(argc, argv, &opt);
+    appname = *argv;
+    parse_options(argc, argv, &opt);
+    /* print options just for debug */
+    printf("fstderr       = %s\n", opt.fstderr);
+    printf("local_port    = %d\n", opt.local_port); // local port to listen connections
+    printf("origin_port   = %d\n", opt.origin_port);
+    printf("mgmt_port     = %d\n", opt.mgmt_port);
+    printf("mgmt_addr     = %s\n", opt.mgmt_addr);
+    printf("pop3_addr     = %s\n", opt.pop3_addr);
+    printf("origin_server = %s\n", opt.origin_server); // listen to a specific interface
+    printf("cmd           = %s\n", opt.exec);
     // if(argc == 1) {
     //     // utilizamos el default
     // } else if(argc == 2) {

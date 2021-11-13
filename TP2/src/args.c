@@ -6,8 +6,8 @@
 #include <getopt.h>
 #include <assert.h>
 
-#include "args.h"
-#include "../../src/include/logger.h"
+#include "include/args.h"
+#include "include/logger.h"
 
 static unsigned short
 port(const char *s) {
@@ -96,7 +96,7 @@ usage(){
 }
 
 void
-parseOptions(int argc, char **argv, struct opt * opt) {
+parse_options(int argc, char **argv, struct opt * opt) {
     /* Setting default values  */
     assert(argv && opt);
     memset(opt, 0, sizeof(*opt));
