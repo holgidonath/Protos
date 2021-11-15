@@ -18,4 +18,6 @@ void usage();
 /* Display version related info */
 void version();
 
+void socket_forwarding_cmd (int source, int destination, char *cmd);
+
 #endif

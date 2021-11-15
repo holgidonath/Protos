@@ -36,7 +36,7 @@ struct opt{
     short mgmt_port;      /* management port */
     short origin_port;    /* POP3 origin server port */
     const char *fstderr;	/* stderr file */
-    char *exec;		        /* filter */
+    char *cmd;		        /* filter */
     char *pop3_addr;      /* proxy listen address */
     char *mgmt_addr;      /* management address */
     char *origin_server;  /* POP3 origin server address */

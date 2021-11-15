@@ -27,8 +27,10 @@
 #include "include/util.h"
 #include "include/metrics.h"
 
-#define N(x) (sizeof(x)/sizeof((x)[0]))
-#define ATTACHMENT(key) ( ( struct connection * )(key)->data)
+#define N(x)                (sizeof(x)/sizeof((x)[0]))
+#define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
+#define READ                0
+#define WRITE               1
 
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
@@ -763,7 +765,7 @@ resolve_done(struct selector_key * key)
     } else 
     {
         // MANEJAR ERROR PARA RESOLVER FQDN
-        log(PERROR, "Failed to resolve origin domain\n");
+        log(ERROR, "Failed to resolve origin domain\n");
     }
 
     return origin_connect(key,connection);
@@ -772,17 +774,12 @@ resolve_done(struct selector_key * key)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                          COPY FUNCTIONS
-
-
 //-----------------------------------------------------------------------------------------------------------------
 
 static void
 copy_init(const unsigned state, struct selector_key *key)
 {
-	//log(INFO, "llegamos a copy");
     struct copy * d = &ATTACHMENT(key)->copy_client;
 
     d->fd       = &ATTACHMENT(key)->client_fd;
@@ -910,6 +907,50 @@ copy_w(struct selector_key *key)
     return ret;
 }
 
+//-----------------------------------------------------------------------------------------------------------------
+//                                        FILTER
+//-----------------------------------------------------------------------------------------------------------------
+/* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
+void socket_forwarding_cmd (int source, int destination, char *cmd) {
+    int n, i;
+    const size_t BUFFER_SIZE = 2048;
+    char buffer[BUFFER_SIZE];
+
+    // pipe_in : father --> child
+    // pipe_out: child  --> father
+    int pipe_in[2], pipe_out[2];
+    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
+        log(ERROR, "socket_forwarding_cmd: Cannot create pipe");
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid = fork();
+    if( pid == 0) {
+        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> pipe_in[READ]
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
+        close(pipe_in[WRITE]);
+        close(pipe_out[READ]);
+        log(INFO, "socket_forwarding_cmd: executing command");
+        exit( system(cmd) );
+    } else {
+        close(pipe_in[READ]); // no need to read from input pipe here // close
+        close(pipe_out[WRITE]);
+
+        while ((n = recv(source, buffer, BUFFER_SIZE, 0)) > 0) { // read source socket --> write to buffer
+            if (write(pipe_in[WRITE], buffer, n) < 0) {
+                log(ERROR, "socket_forwarding_cmd: Cannot write to input pipe of external command");
+                exit(EXIT_FAILURE);
+            }
+            else {
+                log(INFO, "socket_forwarding_cmd: writing to input pipe of external command");
+            }
+            if ((i = read(pipe_out[READ], buffer, BUFFER_SIZE)) > 0) {
+                log(INFO, "socket_forwarding_cmd: sending command output to destination socket...")
+                send(destination, buffer, i, 0);
+            }
+        }
+    }
+}
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
@@ -927,7 +968,7 @@ main(const int argc, char **argv) {
     log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
     log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
     log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
-    log(INFO,"cmd           = %s\n", opt.exec);
+    log(INFO,"cmd           = %s\n", opt.cmd);
 
     close(0);
 

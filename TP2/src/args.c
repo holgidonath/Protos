@@ -114,6 +114,7 @@ parse_options(int argc, char **argv, struct opt * opt) {
     opt->fstderr      = "/dev/null";
     opt->pop3_addr    = NULL;        /* TODO:default value */
     opt->mgmt_addr    = NULL;        /* TODO:default value */
+    opt->cmd          = NULL;
 
     /* Parse command line arguments */
     int c;
@@ -142,7 +143,7 @@ parse_options(int argc, char **argv, struct opt * opt) {
                 opt->mgmt_addr = optarg;
                 break;
             case 't':
-                opt->exec = optarg;
+                opt->cmd = optarg;
                 break;
             case 'e':
                 opt->fstderr = optarg;
