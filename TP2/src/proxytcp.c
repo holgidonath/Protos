@@ -1,15 +1,7 @@
 /**
- * main.c - servidor proxy socks concurrente
- *
- * Interpreta los argumentos de línea de comandos, y monta un socket
- * pasivo.
- *
- * Todas las conexiones entrantes se manejarán en éste hilo.
- *
- * Se descargará en otro hilos las operaciones bloqueantes (resolución de
- * DNS utilizando getaddrinfo), pero toda esa complejidad está oculta en
- * el selector.
+
  */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -20,23 +12,53 @@
 #include <unistd.h>
 #include <sys/types.h>   // socket
 #include <sys/socket.h>  // socket
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <assert.h>
+#include <arpa/inet.h>
+#include <pthread.h>
 
-#include "buffer.h"
-#include "args.h"
-#include "stm.h"
+#include "include/buffer.h"
+#include "include/args.h"
+#include "include/stm.h"
+#include "include/logger.h"
+#include "include/main.h"
+#include "include/util.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( ( struct connection * )(key)->data)
 
+typedef enum address_type {
+    ADDR_IPV4   = 0x01,
+    ADDR_IPV6   = 0x02,
+    ADDR_DOMAIN = 0x03,
+} address_type;
+
+typedef union address {
+    char                    fqdn[0xFF];
+    struct sockaddr_storage addr_storage;
+} address;
+
+typedef struct address_data {
+   
+    in_port_t origin_port;
+    address origin_addr;
+    address_type origin_type;
+    socklen_t origin_addr_len;
+    int origin_domain;
+
+
+} address_data;
+
 struct opt opt;
+const char *appname;
 
 enum proxy_states
 {
-    CONNECTING,
-    RESOLVING,
+    RESOLVE_ORIGIN,
+    CONNECT, 
+    GREETING,
     COPY,
     DONE,
     PERROR
@@ -52,51 +74,85 @@ struct copy
 };
 
 
-typedef struct client
-{
+// typedef struct client
+// {
 
-    int client_fd;
-    struct copy copy;
-
-
-} client;
-
-typedef struct origin 
-{
-    int origin_fd;
-    struct sockaddr_storage origin_addr;
-    socklen_t origin_addr_len;
-    struct addrinfo *origin_resolution;
-    struct addrinfo *origin_resolution_current;
-    struct copy copy;
+//     int client_fd;
+//     struct copy copy_client;
 
 
-} origin;
+// } client;
+
+// typedef struct origin 
+// {
+//     int origin_fd;
+//     uint16_t origin_port;
+//     address origin_addr;
+//     address_type origin_type;
+//     int origin_domain;
+//     socklen_t origin_addr_len;
+//     struct addrinfo *origin_resolution;
+//     struct addrinfo *origin_resolution_current;
+//     struct copy copy;
+
+
+
+// } origin;
 
 struct connection 
 {
-    client client;
-    origin origin;
+    int client_fd;
+    struct copy copy_client;
+    int origin_fd;
+    struct address_data origin_data;
+    struct addrinfo *origin_resolution;
+    struct addrinfo *origin_resolution_current;
+    struct copy copy_origin;
     buffer read_buffer, write_buffer;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     struct state_machine stm;
+    struct connection * next;
+    struct sockaddr_storage       client_addr;
+    socklen_t                     client_addr_len;
 };
+static unsigned origin_connect(struct selector_key * key, struct connection * con);
+
 
 static void
 copy_init(const unsigned state, struct selector_key *key);
+
 static unsigned
 copy_r(struct selector_key *key);
+
 static unsigned
 copy_w(struct selector_key *key);
+
+static unsigned
+connection_ready(struct selector_key  *key);
+
+static unsigned
+resolve_start(struct selector_key * key);
+
+static unsigned
+resolve_done(struct selector_key * key);
+
+static void *
+resolve_blocking(void * data);
 
 static const struct state_definition client_statbl[] = 
 {
     {
-        .state = CONNECTING,
+        .state            = RESOLVE_ORIGIN,
+        // .on_write_ready   = resolve_start,
+        .on_block_ready   = resolve_done,
+    },
+    {
+        .state = CONNECT,
+        .on_write_ready = connection_ready,
 
     },
     {
-        .state = RESOLVING,
+        .state = GREETING,
     },
     {
         .state = COPY,
@@ -120,6 +176,148 @@ proxy_describe_states(void)
    return client_statbl;
 };
 
+void 
+set_origin_address(struct address_data * address_data, const char * adress) 
+{
+    
+    memset(&(address_data->origin_addr.addr_storage), 0, sizeof(address_data->origin_addr.addr_storage));
+    
+    address_data->origin_type = ADDR_IPV4;
+    address_data->origin_domain  = AF_INET;
+    address_data->origin_addr_len = sizeof(struct sockaddr_in);
+    
+
+    struct sockaddr_in ipv4; 
+    memset(&(ipv4), 0, sizeof(ipv4));
+    ipv4.sin_family = AF_INET;
+    int result = 0;
+
+    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0) 
+    {
+        address_data->origin_type   = ADDR_IPV6;
+        address_data->origin_domain  = AF_INET6;
+        address_data->origin_addr_len = sizeof(struct sockaddr_in6);
+    
+
+        struct sockaddr_in6 ipv6; 
+
+        memset(&(ipv6), 0, sizeof(ipv6));
+
+        ipv6.sin6_family = AF_INET6;
+
+        if((result = inet_pton(AF_INET6, adress, &ipv6.sin6_addr.s6_addr)) <= 0)
+        {
+            memset(&(address_data->origin_addr.addr_storage), 0, sizeof(address_data->origin_addr.addr_storage));
+            address_data->origin_type   = ADDR_DOMAIN;
+            memcpy(address_data->origin_addr.fqdn, adress, strlen(adress));
+            address_data->origin_port = opt.origin_port;
+            return;
+        }
+
+        ipv6.sin6_port = htons(opt.origin_port); 
+        memcpy(&address_data->origin_addr.addr_storage, &ipv6, address_data->origin_addr_len);    
+        return;
+    }    
+    ipv4.sin_port = htons(opt.origin_port); 
+    memcpy(&address_data->origin_addr.addr_storage, &ipv4, address_data->origin_addr_len);
+    return;
+}
+
+//---------------------------------------------------------------------------------------
+
+
+
+//       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
+
+
+//------------------------------------------------------------------------------------------
+
+static void proxy_read   (struct selector_key *key);
+static void proxy_write  (struct selector_key *key);
+static void proxy_block  (struct selector_key *key);
+static void proxy_close  (struct selector_key *key);
+static void proxy_done  (struct selector_key *key);
+static const struct fd_handler proxy_handler = {
+    .handle_read   = proxy_read,
+    .handle_write  = proxy_write,
+    .handle_close  = proxy_close,
+    .handle_block  = proxy_block,
+};
+
+static void proxy_read(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_read(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+       proxy_done(key);
+    }
+}
+
+static void proxy_write(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_write(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+       proxy_done(key);
+    }
+}
+
+
+static void proxy_block(struct selector_key *key)
+{
+    struct state_machine *stm = &ATTACHMENT(key)->stm;
+    const enum proxy_states st = stm_handler_block(stm,key);
+
+    if (PERROR == st || DONE == st)
+    {
+        proxy_done(key);
+    }
+}
+static void
+
+proxy_close(struct selector_key *key) {
+
+//   proxy_destroy(ATTACHMENT(key));
+
+}
+
+
+static void
+
+proxy_done(struct selector_key* key) {
+
+  const int fds[] = {
+
+    ATTACHMENT(key)->client_fd,
+
+    ATTACHMENT(key)->origin_fd,
+
+  };
+
+  for(unsigned i = 0; i < N(fds); i++) {
+
+    if(fds[i] != -1) {
+
+      if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
+
+        abort();
+
+      }
+
+      close(fds[i]);
+
+    }
+
+  }
+}
+// FALTA IMPLEMENTAR DESTROYERS
+
+
+
 
 //---------------------------------------------------------------------------------------
 
@@ -141,10 +339,10 @@ new_connection(int client_fd)
     {
         memset(con, 0x00, sizeof(*con));
         
-        con->origin.origin_fd = -1;
-        con->client.client_fd = client_fd;
+        con->origin_fd = -1;
+        con->client_fd = client_fd;
 
-        con->stm    .initial = CONNECTING;
+        con->stm    .initial = RESOLVE_ORIGIN;
         con->stm    .max_state = PERROR;
         con->stm    .states = proxy_describe_states();
         stm_init(&con->stm);
@@ -152,96 +350,214 @@ new_connection(int client_fd)
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
+    //log(INFO, "estado actual: %s\n", stm_state(&con->stm));
     return con;
 }
 
-void
-origin_connection(struct selector_key *key)
+// void
+// origin_connection(struct selector_key *key)
+// {
+//     int origin = 0, valread;
+//     struct sockaddr_in serv_addr;
+//     char *hello = "Hello from client";
+//     char buffer[1024] = {0};
+//     if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+//     {
+//         goto fail;
+//     }
+//     if(selector_fd_set_nio(origin) == -1) {
+//         goto fail;
+//     }
+
+
+
+//     serv_addr.sin_family = AF_INET;
+//     serv_addr.sin_port = htons(opt.origin_port);
+
+//     // Convert IPv4 and IPv6 addresses from text to binary form
+//     if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0)
+//     {
+//         goto fail;
+//     }
+
+//     if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+//     {
+//         if(errno == EINPROGRESS) {
+
+//       // es esperable, tenemos que esperar a la conexión
+
+
+//       // dejamos de de pollear el socket del cliente
+
+//       selector_status st = selector_set_interest_key(key, OP_NOOP);
+
+//       if(SELECTOR_SUCCESS != st) {
+
+
+
+//         //goto fail;
+
+//       }
+
+
+//       // esperamos la conexion en el nuevo socket
+
+//       st = selector_register(key->s, origin, NULL,
+
+//                    OP_WRITE, NULL);
+
+//       if(SELECTOR_SUCCESS != st) {
+
+
+
+//         //goto fail;
+
+//       }
+
+
+
+//     } else {
+
+
+
+//       //goto fail;
+
+//     }
+
+//     }
+//     send(origin , hello , strlen(hello) , 0 );
+//     printf("Hello message sent\n");
+//     valread = read( origin , buffer, 1024);
+//     printf("%s\n",buffer );
+//     return;
+
+// fail:
+//     if(origin != -1) {
+//         close(origin);
+//     }
+// }
+
+static unsigned connection_ready(struct selector_key  *key) 
+
 {
-    int origin = 0, valread;
-    struct sockaddr_in serv_addr;
-    char *hello = "Hello from client";
-    char buffer[1024] = {0};
-    if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-    {
-        goto fail;
-    }
-    if(selector_fd_set_nio(origin) == -1) {
-        goto fail;
-    }
-
-    
-
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(opt.origin_port);
-       
-    // Convert IPv4 and IPv6 addresses from text to binary form
-    if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0) 
-    {
-        goto fail;
-    }
-   
-    if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        if(errno == EINPROGRESS) {
-
-      // es esperable, tenemos que esperar a la conexión
-
-
-      // dejamos de de pollear el socket del cliente
-
-      selector_status st = selector_set_interest_key(key, OP_NOOP);
-
-      if(SELECTOR_SUCCESS != st) {
-
-        
-
-        //goto fail;
-
-      }
-
-
-      // esperamos la conexion en el nuevo socket
-
-      st = selector_register(key->s, origin, NULL,
-
-                   OP_WRITE, NULL);
-
-      if(SELECTOR_SUCCESS != st) {
-
-        
-
-        //goto fail;
-
-      }
-
-      
-
-    } else {
-
-      
-
-      //goto fail;
-
-    }
-        
-    }
-    send(origin , hello , strlen(hello) , 0 );
-    printf("Hello message sent\n");
-    valread = read( origin , buffer, 1024);
-    printf("%s\n",buffer );
-    return;
-
-fail:
-    if(origin != -1) {
-        close(origin);
-    }
+    log(INFO, "origin sever connection success.");
+	return COPY;
 }
 
+static unsigned origin_connect(struct selector_key * key, struct connection * con) {
+
+    enum proxy_states stm_next_status = CONNECT;
+    bool connected = false;
+    con->origin_fd = socket(con->origin_data.origin_domain, SOCK_STREAM, 0);
+    if (con->origin_fd < 0) {
+        perror("socket() failed");
+        return PERROR;
+    }
+   
+    if (selector_fd_set_nio(con->origin_fd) == -1) {
+        goto error;
+    }
+
+//    if (connect(sock,
+//                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
+//                ATTACHMENT(key)->origin_addr_len
+//    ) == -1
+
+    if(con->origin_data.origin_type == ADDR_DOMAIN){
+        char * str;
+        struct sockaddr_in *addr;
+        // sprintf(str, "%s", connection->origin_resolution->ai_canonname);
+        while(con->origin_resolution != NULL){
+            addr = con->origin_resolution->ai_addr;
+            str = inet_ntoa((struct in_addr)addr->sin_addr);
+            // if(strcmp(str, "0.0.0.0") != 0){
+                if (connect(con->origin_fd, addr, con->origin_resolution->ai_addrlen) == -1
+                        ) {
+                    if (errno == EINPROGRESS) {
+                    //    selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+                    //    if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_status_failed");
+                    //        goto error;
+                    //    }
+                         selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                        if (SELECTOR_SUCCESS != st) {
+                            perror("selector_regiser_failed");
+                            goto error;
+                        }
+                        connected = true;
+                        break;
+                    // ATTACHMENT(key)->references += 1;
+
+                    } else {
+                        con->origin_resolution = con->origin_resolution->ai_next;
+                        continue;
+                    }
+                } else {
+                    // selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                    //     if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_regiser_failed");
+                    //         goto error;
+                    //     }
+                    //     connected = true;
+                    //     break;
+                }
+           // }
+            
+            con->origin_resolution = con->origin_resolution->ai_next;
+        }
+        if(!connected){
+            goto error;
+        }
+        freeaddrinfo(con->origin_resolution);
+        con->origin_resolution = 0;
+    } else {
+        if (connect(con->origin_fd, (struct sockaddr *)&con->origin_data.origin_addr.addr_storage, con->origin_data.origin_addr_len) == -1
+                    ) {
+                if (errno == EINPROGRESS) {
+                    // selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+                    //    if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_status_failed");
+                    //        goto error;
+                    //    }
+                     selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                    if (SELECTOR_SUCCESS != st) {
+                        perror("selector_regiser_failed");
+                        goto error;
+                    }
+
+
+                // ATTACHMENT(key)->references += 1;
+
+                 } 
+                 //else {
+                //     goto error;
+                // }
+            } else {
+                // Caso que conecte de una, CREO que no deberiamos tirar abort porque si entramos aca ya conecto
+                // abort();
+            }
+    }
+	
+
+    return stm_next_status;
+
+    error:
+    stm_next_status = PERROR;
+    log(ERROR, "origin server connection.");
+    if (con->origin_fd != -1) {
+        close(con->origin_fd);
+    }
+
+    return stm_next_status;
+}
+
+
 void
-proxy_tcp_connection(struct selector_key *key){
+proxy_tcp_connection(struct selector_key *key)
+{
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len = sizeof(client_addr);
+    pthread_t thread_id;
    
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
@@ -252,6 +568,7 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
     struct connection *connection = new_connection(client);
+    //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
     if(connection == NULL) {
         // sin un estado, nos es imposible manejaro.
         // tal vez deberiamos apagar accept() hasta que detectemos
@@ -259,19 +576,58 @@ proxy_tcp_connection(struct selector_key *key){
         goto fail;
     }
 
-    // memcpy(&con->client->client_addr, &client_addr, client_addr_len);
-    // con->client->client_addr_len = client_addr_len;
+
+    memcpy(&connection->client_addr, &client_addr, client_addr_len);
+    connection->client_addr_len = client_addr_len;
 
     // Falta ver todo lo de la STM en struct connection
 
-    // if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
-    //     goto fail;
-    // }
+    set_origin_address(&connection->origin_data, opt.origin_server);
 
-    origin_connection(key);
+    if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
+        goto fail;
+    }
+//		TODO: falta guardarse en la estructura origin los datos del sv a conectarse
+//    if(inet_pton(AF_INET, opt.origin_server, &(((struct sockaddr_in *)(&ATTACHMENT(key)->origin_addr))->sin_addr))<=0)
+//	{
+//		goto fail;
+//	}
+//    ATTACHMENT(key)->origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
+
+    //TODO: HABRIA QUE CHEQUEAR SI IR A RESOLV_BLOCK O NO
+    //TODO: HABRIA QUE ASIGNAR BIEN ESTRUCTURA CONNECTION
+    //TODO: HABRIA QUE VER ESTADO INICIAL REQUEST_RESOLV Y MANEJO DE ESTADOS
+
+
+    if (connection->origin_data.origin_type != ADDR_DOMAIN)
+    {
+        connection->stm.initial = origin_connect(key,connection);
+    }
+
+    else
+    {
+
+        struct selector_key* new_key = malloc(sizeof(*key));
+        // memcpy(new_key, key, sizeof(*new_key));
+
+        new_key->s = key->s;
+        new_key->fd = client;
+        new_key->data = connection;
+
+        
+        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) 
+        {
+            
+            // selector_set_interest_key(key, OP_NOOP);
+            // pthread_join(thread_id, NULL);
+        } else 
+        {
+            log(ERROR, "function resolve_start, pthread_create error.");
+        }
+    }
     
-
-    return ;
+    // log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
+    return;
 
 fail:
     if(client != -1) {
@@ -368,98 +724,91 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 }
 
 
-//---------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------------------------------
+//                                          RESOLVE_ORIGIN FUNCTIONS
+//----------------------------------------------------------------------------------------------------------------
+static unsigned
+resolve_start(struct selector_key *key) {
+    enum proxy_states stm_next_status = ERROR;
+
+    struct selector_key* new_key = safe_malloc(sizeof(*key));
+    memcpy(new_key, key, sizeof(*new_key));
+
+    pthread_t thread_id;
+    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) {
+        stm_next_status = RESOLVE_ORIGIN;
+        selector_set_interest_key(key, OP_NOOP);
+        pthread_join(thread_id, NULL);
+    } else {
+        log(ERROR, "function resolve_start, pthread_create error.");
+    }
+
+    return stm_next_status;
+}
+
+static void *
+resolve_blocking(void * data) {
+    struct selector_key  *key = (struct selector_key *) data;
+    struct connection * connection = ATTACHMENT(key);
+
+    pthread_detach(pthread_self());
 
 
+    
+    connection->origin_resolution = 0;
+    struct addrinfo hints = {
+        .ai_family    = AF_UNSPEC,    
+        /** Permite IPv4 o IPv6. */
+        .ai_socktype  = SOCK_STREAM,  
+        .ai_flags     = AI_PASSIVE,   
+        .ai_protocol  = 0,        
+        .ai_canonname = NULL,
+        .ai_addr      = NULL,
+        .ai_next      = NULL,
+    };
 
-//       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
+    char buff[7];
+    snprintf(buff, sizeof(buff), "%d", connection->origin_data.origin_port);
 
-
-//------------------------------------------------------------------------------------------
-
-static void proxy_read   (struct selector_key *key);
-static void proxy_write  (struct selector_key *key);
-static void proxy_block  (struct selector_key *key);
-static void proxy_close  (struct selector_key *key);
-static void proxy_done  (struct selector_key *key);
-static const struct fd_handler proxy_handler = {
-    .handle_read   = proxy_read,
-    .handle_write  = proxy_write,
-    .handle_close  = proxy_close,
-    .handle_block  = proxy_block,
-};
-
-static void proxy_read(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_read(stm,key);
-
-    if (PERROR == st || DONE == st)
+    if( getaddrinfo(connection->origin_data.origin_addr.fqdn,
+                    buff,
+                    &hints,
+                    &connection->origin_resolution
+                    ) != 0 ) 
     {
-       proxy_done(key);
+        log(INFO, "connection_resolve_blocking, couldn't resolve address");
+
     }
+    // end of blocking task
+    selector_notify_block(key->s, key->fd);
+
+    free(data);
+    return 0;
 }
 
-static void proxy_write(struct selector_key *key)
+
+static unsigned
+resolve_done(struct selector_key * key) 
 {
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_write(stm,key);
-
-    if (PERROR == st || DONE == st)
+    struct connection * connection = ATTACHMENT(key);
+    if(connection->origin_resolution != 0) 
     {
-       proxy_done(key);
-    }
-}
-
-
-static void proxy_block(struct selector_key *key)
-{
-    struct state_machine *stm = &ATTACHMENT(key)->stm;
-    const enum proxy_states st = stm_handler_block(stm,key);
-
-    if (PERROR == st || DONE == st)
+        connection->origin_data.origin_domain = connection->origin_resolution->ai_family;
+        connection->origin_data.origin_addr_len = connection->origin_resolution->ai_addrlen;
+        memcpy(&connection->origin_data.origin_addr.addr_storage,
+                connection->origin_resolution->ai_addr,
+                connection->origin_resolution->ai_addrlen);
+        // freeaddrinfo(connection->origin_resolution);
+        // connection->origin_resolution = 0;
+    } else 
     {
-        proxy_done(key);
-    }
-}
-static void
-
-proxy_close(struct selector_key *key) {
-
-//   proxy_destroy(ATTACHMENT(key));
-
-}
-
-
-static void
-
-proxy_done(struct selector_key* key) {
-
-  const int fds[] = {
-
-    ATTACHMENT(key)->client.client_fd,
-
-    ATTACHMENT(key)->origin.origin_fd,
-
-  };
-
-  for(unsigned i = 0; i < N(fds); i++) {
-
-    if(fds[i] != -1) {
-
-      if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-
-        abort();
-
-      }
-
-      close(fds[i]);
-
+        // MANEJAR ERROR PARA RESOLVER FQDN
+        log(PERROR, "Failed to resolve origin domain\n");
     }
 
-  }
+    return origin_connect(key,connection);
 }
-// FALTA IMPLEMENTAR DESTROYERS
+
 
 
 //-----------------------------------------------------------------------------------------------------------------
@@ -473,19 +822,21 @@ proxy_done(struct selector_key* key) {
 static void
 copy_init(const unsigned state, struct selector_key *key)
 {
-    struct copy * d = &ATTACHMENT(key)->client.copy;
+	//log(INFO, "llegamos a copy");
+    struct copy * d = &ATTACHMENT(key)->copy_client;
 
-    d->fd       = &ATTACHMENT(key)->client.client_fd;
+    d->fd       = &ATTACHMENT(key)->client_fd;
     d->rb       = &ATTACHMENT(key)->read_buffer;
     d->wb       = &ATTACHMENT(key)->write_buffer;
     d->duplex   = OP_READ | OP_WRITE;
-    d->other    = &ATTACHMENT(key)->origin.copy;
+    d->other    = &ATTACHMENT(key)->copy_origin;
 
-    d->fd       = &ATTACHMENT(key)->origin.origin_fd;
+    d			= &ATTACHMENT(key)->copy_origin;
+    d->fd       = &ATTACHMENT(key)->origin_fd;
     d->rb       = &ATTACHMENT(key)->write_buffer;
     d->wb       = &ATTACHMENT(key)->read_buffer;
     d->duplex   = OP_READ | OP_WRITE;
-    d->other    = &ATTACHMENT(key)->client.copy;
+    d->other    = &ATTACHMENT(key)->copy_client;
 }
 
 static fd_interest
@@ -510,7 +861,7 @@ copy_compute_interests(fd_selector s, struct  copy* d)
 static struct copy *
 copy_ptr(struct selector_key * key)
 {
-    struct copy *d = &ATTACHMENT(key)->client.copy;
+    struct copy *d = &ATTACHMENT(key)->copy_client;
 
     if(*d->fd == key->fd)
     {
@@ -527,7 +878,7 @@ static unsigned
 copy_r(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -565,7 +916,7 @@ static unsigned
 copy_w(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -601,48 +952,29 @@ copy_w(struct selector_key *key)
 
 
 //-----------------------------------------------------------------------------------------------------------------
-
-
 //                                               MAIN
-
-
 //-----------------------------------------------------------------------------------------------------------------
-
-
-
-
+static address_data origin_data;
 int
-main(const int argc, const char **argv) {
-    unsigned port = 1080;
-    parseOptions(argc, argv, &opt);
-    // if(argc == 1) {
-    //     // utilizamos el default
-    // } else if(argc == 2) {
-    //     char *end     = 0;
-    //     const long sl = strtol(argv[1], &end, 10);
+main(const int argc, char **argv) {
+    appname = *argv;
+    parse_options(argc, argv, &opt);
+    /* print options just for debug */
+    log(INFO,"fstderr       = %s\n", opt.fstderr);
+    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
+    log(INFO,"origin_port   = %d\n", opt.origin_port);
+    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
+    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
+    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
+    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
+    log(INFO,"cmd           = %s\n", opt.exec);
 
-    //     if (end == argv[1]|| '\0' != *end 
-    //        || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno)
-    //        || sl < 0 || sl > USHRT_MAX) {
-    //         fprintf(stderr, "port should be an integer: %s\n", argv[1]);
-    //         return 1;
-    //     }
-    //     port = sl;
-    // } else {
-    //     fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-    //     return 1;
-    // }
-
-    // no tenemos nada que leer de stdin
     close(0);
 
-    
     const char       *err_msg = NULL;
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
-
-  
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
 
@@ -686,6 +1018,9 @@ main(const int argc, const char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
+
+
+
     ss = selector_register(selector, proxy_fd, &passive_accept_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {

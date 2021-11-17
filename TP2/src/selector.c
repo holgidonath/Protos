@@ -15,7 +15,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/signal.h>
-#include "selector.h"
+#include "include/selector.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -478,27 +478,53 @@ handle_iteration(fd_selector s) {
     }
 }
 
+// static void
+// handle_block_notifications(fd_selector s) {
+//     struct selector_key key = {
+//         .s = s,
+//     };
+//     pthread_mutex_lock(&s->resolution_mutex);
+//     for(struct blocking_job *j = s->resolution_jobs;
+//         j != NULL ;
+//         j  = j->next) {
+
+//         struct item *item = s->fds + j->fd;
+//         if(ITEM_USED(item)) {
+//             key.fd   = item->fd;
+//             key.data = item->data;
+//             item->handler->handle_block(&key);
+//         }
+
+//         free(j);
+//     }
+//     s->resolution_jobs = 0;
+//     pthread_mutex_unlock(&s->resolution_mutex);
+// }
+
 static void
-handle_block_notifications(fd_selector s) {
+handle_block_notifications(fd_selector s)
+{
     struct selector_key key = {
         .s = s,
     };
     pthread_mutex_lock(&s->resolution_mutex);
-    for(struct blocking_job *j = s->resolution_jobs;
-        j != NULL ;
-        j  = j->next) {
-
+    for (struct blocking_job *j = s->resolution_jobs;
+         j != NULL;)
+    {
         struct item *item = s->fds + j->fd;
-        if(ITEM_USED(item)) {
-            key.fd   = item->fd;
+        if (ITEM_USED(item))
+        {
+            key.fd = item->fd;
             key.data = item->data;
             item->handler->handle_block(&key);
         }
-
-        free(j);
+        struct blocking_job * prev_job = j;
+        j=j->next;
+        free(prev_job);
     }
     s->resolution_jobs = 0;
     pthread_mutex_unlock(&s->resolution_mutex);
+
 }
 
 
