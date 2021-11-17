@@ -25,6 +25,7 @@
 #include "include/logger.h"
 #include "include/main.h"
 #include "include/util.h"
+#include "include/metrics.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key) ( ( struct connection * )(key)->data)
@@ -73,7 +74,7 @@ struct copy
  
 };
 
-
+static metrics_t metrics;
 // typedef struct client
 // {
 
@@ -309,7 +310,7 @@ proxy_done(struct selector_key* key) {
       }
 
       close(fds[i]);
-
+        metrics->concurrent_connections--;
     }
 
   }
@@ -441,6 +442,8 @@ static unsigned connection_ready(struct selector_key  *key)
 
 {
     log(INFO, "origin sever connection success.");
+    metrics->concurrent_connections++;
+    metrics->total_connections++;
 	return COPY;
 }
 
@@ -978,6 +981,8 @@ main(const int argc, char **argv) {
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
 
+    metrics = init_metrics();
+
     int proxy_fd = create_proxy_socket(addr, opt);
     // int admin_fd = create_management_socket(mngmt_addr,opt);
 
@@ -1057,6 +1062,8 @@ finally:
     selector_close();
 
     // socksv5_pool_destroy();
+
+    free_metrics(metrics);
 
     if(proxy_fd >= 0) {
         close(proxy_fd);
