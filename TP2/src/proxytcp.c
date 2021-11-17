@@ -210,7 +210,7 @@ set_origin_address(struct address_data * address_data, const char * adress)
             memset(&(address_data->origin_addr.addr_storage), 0, sizeof(address_data->origin_addr.addr_storage));
             address_data->origin_type   = ADDR_DOMAIN;
             memcpy(address_data->origin_addr.fqdn, adress, strlen(adress));
-            address_data->origin_port = htons(opt.origin_port);
+            address_data->origin_port = opt.origin_port;
             return;
         }
 
@@ -463,54 +463,54 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
 //                ATTACHMENT(key)->origin_addr_len
 //    ) == -1
 
-    // if(con->origin_data.origin_type == ADDR_DOMAIN){
-    //     char * str;
-    //     struct sockaddr_in *addr;
-    //     // sprintf(str, "%s", connection->origin_resolution->ai_canonname);
-    //     while(con->origin_resolution != NULL){
-    //         addr = con->origin_resolution->ai_addr;
-    //         str = inet_ntoa((struct in_addr)addr->sin_addr);
-    //         if(strcmp(str, "0.0.0.0") != 0){
-    //             if (connect(con->origin_fd, addr, con->origin_resolution->ai_addrlen) == -1
-    //                     ) {
-    //                 if (errno == EINPROGRESS) {
-    //                    selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
-    //                    if (SELECTOR_SUCCESS != st) {
-    //                         perror("selector_status_failed");
-    //                        goto error;
-    //                    }
-    //                     st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
-    //                     if (SELECTOR_SUCCESS != st) {
-    //                         perror("selector_regiser_failed");
-    //                         goto error;
-    //                     }
-    //                     connected = true;
-    //                     break;
-    //                 // ATTACHMENT(key)->references += 1;
+    if(con->origin_data.origin_type == ADDR_DOMAIN){
+        char * str;
+        struct sockaddr_in *addr;
+        // sprintf(str, "%s", connection->origin_resolution->ai_canonname);
+        while(con->origin_resolution != NULL){
+            addr = con->origin_resolution->ai_addr;
+            str = inet_ntoa((struct in_addr)addr->sin_addr);
+            // if(strcmp(str, "0.0.0.0") != 0){
+                if (connect(con->origin_fd, addr, con->origin_resolution->ai_addrlen) == -1
+                        ) {
+                    if (errno == EINPROGRESS) {
+                    //    selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+                    //    if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_status_failed");
+                    //        goto error;
+                    //    }
+                         selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                        if (SELECTOR_SUCCESS != st) {
+                            perror("selector_regiser_failed");
+                            goto error;
+                        }
+                        connected = true;
+                        break;
+                    // ATTACHMENT(key)->references += 1;
 
-    //                 } else {
-    //                     con->origin_resolution = con->origin_resolution->ai_next;
-    //                     continue;
-    //                 }
-    //             } else {
-    //                 selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
-    //                     if (SELECTOR_SUCCESS != st) {
-    //                         perror("selector_regiser_failed");
-    //                         goto error;
-    //                     }
-    //                     connected = true;
-    //                     break;
-    //             }
-    //         }
+                    } else {
+                        con->origin_resolution = con->origin_resolution->ai_next;
+                        continue;
+                    }
+                } else {
+                    // selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                    //     if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_regiser_failed");
+                    //         goto error;
+                    //     }
+                    //     connected = true;
+                    //     break;
+                }
+           // }
             
-    //         con->origin_resolution = con->origin_resolution->ai_next;
-    //     }
-    //     if(!connected){
-    //         goto error;
-    //     }
-    //     freeaddrinfo(con->origin_resolution);
-    //     con->origin_resolution = 0;
-    // } else {
+            con->origin_resolution = con->origin_resolution->ai_next;
+        }
+        if(!connected){
+            goto error;
+        }
+        freeaddrinfo(con->origin_resolution);
+        con->origin_resolution = 0;
+    } else {
         if (connect(con->origin_fd, (struct sockaddr *)&con->origin_data.origin_addr.addr_storage, con->origin_data.origin_addr_len) == -1
                     ) {
                 if (errno == EINPROGRESS) {
@@ -536,7 +536,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
                 // Caso que conecte de una, CREO que no deberiamos tirar abort porque si entramos aca ya conecto
                 // abort();
             }
-    //}
+    }
 	
 
     return stm_next_status;
@@ -798,8 +798,8 @@ resolve_done(struct selector_key * key)
         memcpy(&connection->origin_data.origin_addr.addr_storage,
                 connection->origin_resolution->ai_addr,
                 connection->origin_resolution->ai_addrlen);
-        freeaddrinfo(connection->origin_resolution);
-        connection->origin_resolution = 0;
+        // freeaddrinfo(connection->origin_resolution);
+        // connection->origin_resolution = 0;
     } else 
     {
         // MANEJAR ERROR PARA RESOLVER FQDN
