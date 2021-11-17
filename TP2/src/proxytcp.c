@@ -447,7 +447,7 @@ static unsigned connection_ready(struct selector_key  *key)
 static unsigned origin_connect(struct selector_key * key, struct connection * con) {
 
     enum proxy_states stm_next_status = CONNECT;
-
+    bool connected = false;
     con->origin_fd = socket(con->origin_data.origin_domain, SOCK_STREAM, 0);
     if (con->origin_fd < 0) {
         perror("socket() failed");
@@ -462,29 +462,82 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
 //                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
 //                ATTACHMENT(key)->origin_addr_len
 //    ) == -1
-	if (connect(con->origin_fd, (struct sockaddr *)&con->origin_data.origin_addr.addr_storage, con->origin_data.origin_addr_len) == -1
-            ) {
-        if (errno == EINPROGRESS) {
-        //    selector_status st = selector_set_interest_key(key, OP_NOOP);
-        //    if (SELECTOR_SUCCESS != st) {
-        //         perror("selector_status_failed");
-        //        goto error;
-        //    }
-        	selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
-            if (SELECTOR_SUCCESS != st) {
-                perror("selector_regiser_failed");
-                goto error;
+
+    // if(con->origin_data.origin_type == ADDR_DOMAIN){
+    //     char * str;
+    //     struct sockaddr_in *addr;
+    //     // sprintf(str, "%s", connection->origin_resolution->ai_canonname);
+    //     while(con->origin_resolution != NULL){
+    //         addr = con->origin_resolution->ai_addr;
+    //         str = inet_ntoa((struct in_addr)addr->sin_addr);
+    //         if(strcmp(str, "0.0.0.0") != 0){
+    //             if (connect(con->origin_fd, addr, con->origin_resolution->ai_addrlen) == -1
+    //                     ) {
+    //                 if (errno == EINPROGRESS) {
+    //                    selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+    //                    if (SELECTOR_SUCCESS != st) {
+    //                         perror("selector_status_failed");
+    //                        goto error;
+    //                    }
+    //                     st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+    //                     if (SELECTOR_SUCCESS != st) {
+    //                         perror("selector_regiser_failed");
+    //                         goto error;
+    //                     }
+    //                     connected = true;
+    //                     break;
+    //                 // ATTACHMENT(key)->references += 1;
+
+    //                 } else {
+    //                     con->origin_resolution = con->origin_resolution->ai_next;
+    //                     continue;
+    //                 }
+    //             } else {
+    //                 selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+    //                     if (SELECTOR_SUCCESS != st) {
+    //                         perror("selector_regiser_failed");
+    //                         goto error;
+    //                     }
+    //                     connected = true;
+    //                     break;
+    //             }
+    //         }
+            
+    //         con->origin_resolution = con->origin_resolution->ai_next;
+    //     }
+    //     if(!connected){
+    //         goto error;
+    //     }
+    //     freeaddrinfo(con->origin_resolution);
+    //     con->origin_resolution = 0;
+    // } else {
+        if (connect(con->origin_fd, (struct sockaddr *)&con->origin_data.origin_addr.addr_storage, con->origin_data.origin_addr_len) == -1
+                    ) {
+                if (errno == EINPROGRESS) {
+                    // selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+                    //    if (SELECTOR_SUCCESS != st) {
+                    //         perror("selector_status_failed");
+                    //        goto error;
+                    //    }
+                     selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                    if (SELECTOR_SUCCESS != st) {
+                        perror("selector_regiser_failed");
+                        goto error;
+                    }
+
+
+                // ATTACHMENT(key)->references += 1;
+
+                 } 
+                 //else {
+                //     goto error;
+                // }
+            } else {
+                // Caso que conecte de una, CREO que no deberiamos tirar abort porque si entramos aca ya conecto
+                // abort();
             }
-
-
-           // ATTACHMENT(key)->references += 1;
-
-        } else {
-            goto error;
-        }
-    } else {
-        abort();
-    }
+    //}
+	
 
     return stm_next_status;
 
@@ -546,7 +599,6 @@ proxy_tcp_connection(struct selector_key *key)
     //TODO: HABRIA QUE VER ESTADO INICIAL REQUEST_RESOLV Y MANEJO DE ESTADOS
 
 
-
     if (connection->origin_data.origin_type != ADDR_DOMAIN)
     {
         connection->stm.initial = origin_connect(key,connection);
@@ -555,23 +607,23 @@ proxy_tcp_connection(struct selector_key *key)
     else
     {
 
-    struct selector_key* new_key = malloc(sizeof(*key));
-    // memcpy(new_key, key, sizeof(*new_key));
+        struct selector_key* new_key = malloc(sizeof(*key));
+        // memcpy(new_key, key, sizeof(*new_key));
 
-    new_key->s = key->s;
-    new_key->fd = client;
-    new_key->data = connection;
+        new_key->s = key->s;
+        new_key->fd = client;
+        new_key->data = connection;
 
-    
-    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) 
-    {
         
-        selector_set_interest_key(key, OP_NOOP);
-        pthread_join(thread_id, NULL);
-    } else 
-    {
-        log(ERROR, "function resolve_start, pthread_create error.");
-    }
+        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) 
+        {
+            
+            // selector_set_interest_key(key, OP_NOOP);
+            // pthread_join(thread_id, NULL);
+        } else 
+        {
+            log(ERROR, "function resolve_start, pthread_create error.");
+        }
     }
     
     // log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
@@ -727,7 +779,6 @@ resolve_blocking(void * data) {
         log(INFO, "connection_resolve_blocking, couldn't resolve address");
 
     }
-
     // end of blocking task
     selector_notify_block(key->s, key->fd);
 
@@ -744,7 +795,7 @@ resolve_done(struct selector_key * key)
     {
         connection->origin_data.origin_domain = connection->origin_resolution->ai_family;
         connection->origin_data.origin_addr_len = connection->origin_resolution->ai_addrlen;
-        memcpy(&connection->origin_data.origin_addr,
+        memcpy(&connection->origin_data.origin_addr.addr_storage,
                 connection->origin_resolution->ai_addr,
                 connection->origin_resolution->ai_addrlen);
         freeaddrinfo(connection->origin_resolution);
@@ -752,6 +803,7 @@ resolve_done(struct selector_key * key)
     } else 
     {
         // MANEJAR ERROR PARA RESOLVER FQDN
+        log(PERROR, "Failed to resolve origin domain\n");
     }
 
     return origin_connect(key,connection);
