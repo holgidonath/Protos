@@ -115,7 +115,11 @@ struct connection
     struct connection * next;
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len;
+    unsigned                references;
 };
+
+static struct connection * connections = NULL;
+
 static unsigned origin_connect(struct selector_key * key, struct connection * con);
 
 
@@ -238,6 +242,7 @@ static void proxy_write  (struct selector_key *key);
 static void proxy_block  (struct selector_key *key);
 static void proxy_close  (struct selector_key *key);
 static void proxy_done  (struct selector_key *key);
+static void proxy_destroy(struct connection * con);
 static const struct fd_handler proxy_handler = {
     .handle_read   = proxy_read,
     .handle_write  = proxy_write,
@@ -278,11 +283,34 @@ static void proxy_block(struct selector_key *key)
         proxy_done(key);
     }
 }
-static void
 
+static void
+proxy_destroy(struct connection * con){
+    if(con != NULL){
+        // struct connection * aux = connections;
+        // while(aux->next != NULL && aux->next != con){
+        //     aux = aux->next;
+        // }
+        // aux->next = con->next;
+        // if(con->origin_resolution != NULL){
+        //     free(con->origin_resolution);
+        // }
+        // if(con->origin_resolution_current != NULL){
+        //     free(con->origin_resolution_current);
+        // }
+        if(con->references == 1){
+            free(con);
+        } else {
+            con->references -= 1;
+        }
+        
+    }
+}
+
+static void
 proxy_close(struct selector_key *key) {
 
-//   proxy_destroy(ATTACHMENT(key));
+   proxy_destroy(ATTACHMENT(key));
 
 }
 
@@ -336,6 +364,9 @@ new_connection(int client_fd)
 {
     struct connection * con;
     con = malloc(sizeof(*con));
+    // if (connections == NULL){
+    //     connections = con;
+    // }
     if (con != NULL)
     {
         memset(con, 0x00, sizeof(*con));
@@ -346,104 +377,29 @@ new_connection(int client_fd)
         con->stm    .initial = RESOLVE_ORIGIN;
         con->stm    .max_state = PERROR;
         con->stm    .states = proxy_describe_states();
+        //con->next           = NULL;
+        con->references = 1;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
+    // struct connection * aux = connections;
+    // while (aux->next != NULL)
+    // {
+    //     aux = aux->next;
+    // }
+    // aux->next = con;
+    metrics->concurrent_connections++;
+    metrics->total_connections++;
     //log(INFO, "estado actual: %s\n", stm_state(&con->stm));
     return con;
 }
-
-// void
-// origin_connection(struct selector_key *key)
-// {
-//     int origin = 0, valread;
-//     struct sockaddr_in serv_addr;
-//     char *hello = "Hello from client";
-//     char buffer[1024] = {0};
-//     if ((origin = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-//     {
-//         goto fail;
-//     }
-//     if(selector_fd_set_nio(origin) == -1) {
-//         goto fail;
-//     }
-
-
-
-//     serv_addr.sin_family = AF_INET;
-//     serv_addr.sin_port = htons(opt.origin_port);
-
-//     // Convert IPv4 and IPv6 addresses from text to binary form
-//     if(inet_pton(AF_INET, opt.origin_server, &serv_addr.sin_addr)<=0)
-//     {
-//         goto fail;
-//     }
-
-//     if (connect(origin, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-//     {
-//         if(errno == EINPROGRESS) {
-
-//       // es esperable, tenemos que esperar a la conexión
-
-
-//       // dejamos de de pollear el socket del cliente
-
-//       selector_status st = selector_set_interest_key(key, OP_NOOP);
-
-//       if(SELECTOR_SUCCESS != st) {
-
-
-
-//         //goto fail;
-
-//       }
-
-
-//       // esperamos la conexion en el nuevo socket
-
-//       st = selector_register(key->s, origin, NULL,
-
-//                    OP_WRITE, NULL);
-
-//       if(SELECTOR_SUCCESS != st) {
-
-
-
-//         //goto fail;
-
-//       }
-
-
-
-//     } else {
-
-
-
-//       //goto fail;
-
-//     }
-
-//     }
-//     send(origin , hello , strlen(hello) , 0 );
-//     printf("Hello message sent\n");
-//     valread = read( origin , buffer, 1024);
-//     printf("%s\n",buffer );
-//     return;
-
-// fail:
-//     if(origin != -1) {
-//         close(origin);
-//     }
-// }
 
 static unsigned connection_ready(struct selector_key  *key) 
 
 {
     log(INFO, "origin sever connection success.");
-    metrics->concurrent_connections++;
-    metrics->total_connections++;
 	return COPY;
 }
 
@@ -477,17 +433,18 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
                 if (connect(con->origin_fd, addr, con->origin_resolution->ai_addrlen) == -1
                         ) {
                     if (errno == EINPROGRESS) {
-                    //    selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
-                    //    if (SELECTOR_SUCCESS != st) {
-                    //         perror("selector_status_failed");
-                    //        goto error;
-                    //    }
-                         selector_status st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
+                        selector_status st = selector_set_interest(key->s, con->client_fd, OP_NOOP);
+                        if (SELECTOR_SUCCESS != st) {
+                                perror("selector_status_failed");
+                            goto error;
+                        }
+                         st = selector_register(key->s, con->origin_fd, &proxy_handler, OP_WRITE, con);
                         if (SELECTOR_SUCCESS != st) {
                             perror("selector_regiser_failed");
                             goto error;
                         }
                         connected = true;
+                        ATTACHMENT(key)->references += 1;
                         break;
                     // ATTACHMENT(key)->references += 1;
 
@@ -529,7 +486,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
                     }
 
 
-                // ATTACHMENT(key)->references += 1;
+                    ATTACHMENT(key)->references += 1;
 
                  } 
                  //else {
