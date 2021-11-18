@@ -36,7 +36,9 @@
 #define RE                  22          //a partir del 20 para poder usar tranquilamente constantes que necesitemos 
 #define RET                 23
 #define RETR                24
-#define FORWARD             25
+#define DONERETR            25
+#define FORWARD             26
+
 
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
@@ -124,6 +126,7 @@ struct connection
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len;
     unsigned                references;
+    bool                    was_greeted;
 };
 
 static struct connection * connections = NULL;
@@ -153,6 +156,8 @@ static void *
 resolve_blocking(void * data);
 
 void parse_command(char * command);
+void parse_response(char * command);
+bool parse_greeting(char * command, struct selector_key *key);
 
 static const struct state_definition client_statbl[] = 
 {
@@ -389,6 +394,7 @@ new_connection(int client_fd)
         con->stm    .states = proxy_describe_states();
         //con->next           = NULL;
         con->references = 1;
+        con->was_greeted = false;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
@@ -857,13 +863,14 @@ copy_r(struct selector_key *key)
 
     metrics->bytes_transfered += n;
 
-    if(ptr[0] == 'R'){
-        log(INFO,"possible retr found");
-    }
+    if(key->fd == ATTACHMENT(key)->client_fd){
+        if(ptr[0] == 'R'){
+            log(INFO,"possible retr found");
+        }
+        parse_command(ptr);
+    } 
 
-    parse_command(ptr);
-
-    log(INFO,"message captured");
+    // log(INFO,"message captured");
 
     if(n <=0 )
     {
@@ -902,6 +909,19 @@ copy_w(struct selector_key *key)
     unsigned ret    = COPY;
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
+
+    // if(key->fd == ATTACHMENT(key)->client_fd){
+    //     if(!ATTACHMENT(key)->was_greeted){
+    //         bool greeting = parse_greeting(ptr, key);
+    //         if(!greeting){
+                
+    //         }
+    //     }else {
+    //         // parse_response();
+    //     }
+        
+    // } 
+
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1)
     {
@@ -963,12 +983,28 @@ void parse_command(char * ptr){
            }
            break;
            case RETR:
-           log(INFO, "RETR was found\n");
+           if(ptr[i] == ' '){
+                state = DONERETR;
+           } else {
+               state = FORWARD;
+           }
+           break;
+           case DONERETR:
+           log(INFO, "RETR was found");
            state = FORWARD;
            break;
         }
         i++;
     }
+}
+
+bool parse_greeting(char * response, struct selector_key *key)
+{
+    if(strcmp(*response, "+") == 0){
+        ATTACHMENT(key)->was_greeted = true;
+        return true;
+    }
+    return false;
 }
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN

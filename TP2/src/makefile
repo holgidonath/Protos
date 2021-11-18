@@ -1,5 +1,5 @@
 PROXY_NAME = pop3filter
-PROXY_SOURCES = proxytcp buffer args selector stm util metrics extcmd
+PROXY_SOURCES = proxytcp buffer args selector stm util metrics
 LIBS =  logger
 CC_C = gcc
 PTHREADFLAG = -pthread
