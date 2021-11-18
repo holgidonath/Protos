@@ -31,6 +31,12 @@
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
 #define READ                0
 #define WRITE               1
+#define BEGIN               20
+#define R                   21
+#define RE                  22          //a partir del 20 para poder usar tranquilamente constantes que necesitemos 
+#define RET                 23
+#define RETR                24
+#define FORWARD             25
 
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
@@ -145,6 +151,8 @@ resolve_done(struct selector_key * key);
 
 static void *
 resolve_blocking(void * data);
+
+void parse_command(char * command);
 
 static const struct state_definition client_statbl[] = 
 {
@@ -488,7 +496,7 @@ static unsigned origin_connect(struct selector_key * key, struct connection * co
                     }
 
 
-                    ATTACHMENT(key)->references += 1;
+                    //ATTACHMENT(key)->references += 1;
 
                  } 
                  //else {
@@ -846,6 +854,17 @@ copy_r(struct selector_key *key)
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
+
+    metrics->bytes_transfered += n;
+
+    if(ptr[0] == 'R'){
+        log(INFO,"possible retr found");
+    }
+
+    parse_command(ptr);
+
+    log(INFO,"message captured");
+
     if(n <=0 )
     {
         shutdown(*d->fd, SHUT_RD);
@@ -907,6 +926,50 @@ copy_w(struct selector_key *key)
     return ret;
 }
 
+//-----------------------------------------------------------------------------------------------------------------
+//                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
+//-----------------------------------------------------------------------------------------------------------------
+void parse_command(char * ptr){
+    int i = 0;
+    int state = BEGIN;
+    while(state != FORWARD){
+       switch(state){
+           case BEGIN:
+           if(ptr[i] == 'R'){
+               state = R;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case R:
+           if(ptr[i] == 'E'){
+               state = RE;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case RE:
+           if(ptr[i] == 'T'){
+               state = RET;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case RET:
+           if(ptr[i] == 'R'){
+               state = RETR;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case RETR:
+           log(INFO, "RETR was found\n");
+           state = FORWARD;
+           break;
+        }
+        i++;
+    }
+}
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
 //-----------------------------------------------------------------------------------------------------------------
