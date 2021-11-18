@@ -1,8 +1,9 @@
-#include "include/util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
+
+#include "include/util.h"
 
 void *safe_malloc(size_t bytes) {
     void *p;

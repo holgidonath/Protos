@@ -7,9 +7,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include "socket_admin.h"
-#include "metrics.h"
-#include "thread_admin.h"
+#include "include/socket_admin.h"
+#include "include/metrics.h"
+#include "include/thread_admin.h"
 
 typedef struct thread_args * thread_args_t
 

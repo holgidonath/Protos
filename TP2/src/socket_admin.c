@@ -8,9 +8,9 @@
 #include <netinet/sctp.h>
 #include <sys/select.h>
 
-#include "parser_admin.h"
-#include "thread_admin.h"
-#include "socket_admin.h"
+#include "include/parser_admin.h"
+#include "include/thread_admin.h"
+#include "include/socket_admin.h"
 
 int create_socket(void);
 int bind_admin(int admin_fd, struct sockaddr_in * admin_addr, size_t admin_addr_size);

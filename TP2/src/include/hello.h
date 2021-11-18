@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "include/buffer.h"
+#include "buffer.h"
 
 static const uint8_t METHOD_NO_AUTHENTICATION_REQUIRED = 0x00;
 static const uint8_t METHOD_NO_ACCEPTABLE_METHODS      = 0xFF;

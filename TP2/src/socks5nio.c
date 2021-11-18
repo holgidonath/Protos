@@ -1,7 +1,7 @@
 /**
  * socks5nio.c  - controla el flujo de un proxy SOCKSv5 (sockets no bloqueantes)
  */
-#include<stdio.h>
+#include <stdio.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // memset
 #include <assert.h>  // assert
@@ -9,15 +9,13 @@
 #include <time.h>
 #include <unistd.h>  // close
 #include <pthread.h>
-
 #include <arpa/inet.h>
 
-#include "hello.h"
-#include "request.h"
+#include "include/hello.h"
+#include "inlcude/request.h"
 #include "include/buffer.h"
-
 #include "include/stm.h"
-#include"include/netutils.h"
+#include "include/netutils.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 

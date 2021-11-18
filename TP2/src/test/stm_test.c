@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <check.h>
+
 #include "../include/selector.h"
 #include "../include/stm.h"
 

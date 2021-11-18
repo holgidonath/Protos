@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <check.h>
 
-#include "hello.h"
-#include "test/tests.h"
+#include "../include/hello.h"
+#include "tests.h"
 
 #define FIXBUF(b, data) buffer_init(&(b), N(data), (data)); \
                         buffer_write_adv(&(b), N(data))
