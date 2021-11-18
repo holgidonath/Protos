@@ -30,7 +30,7 @@ Vamos a `/etc/dovecot/conf.d/10-auth.conf`, y en una sección que diga Authentic
 
 En el archivo `/etc/dovecot/conf.d/20-pop3.conf` dejar descomentada la línea `pop3_uidl_format = %08Xu%08Xv`
 
-En el archivo `/etc/dovecot/conf.d/10-mail.conf` dejar solamente comentada la línea `mail_location = mbox:~/mail:INBOX=/var/mail/%u`
+En el archivo `/etc/dovecot/conf.d/10-mail.conf` dejar solamente descomentada la línea `mail_location = mbox:~/mail:INBOX=/var/mail/%u`
 
 En el archivo `/etc/dovecot/conf.d/auth-system.conf.ext`, dentro de passdb asegurarse que la línea de args sea `args = session=yes failure_show_msg=yes dovecot`
 

@@ -910,17 +910,17 @@ copy_w(struct selector_key *key)
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
 
-    // if(key->fd == ATTACHMENT(key)->client_fd){
-    //     if(!ATTACHMENT(key)->was_greeted){
-    //         bool greeting = parse_greeting(ptr, key);
-    //         if(!greeting){
-                
-    //         }
-    //     }else {
-    //         // parse_response();
-    //     }
+     if(key->fd == ATTACHMENT(key)->client_fd){
+         if(!ATTACHMENT(key)->was_greeted){
+             bool greeting = parse_greeting(ptr, key);
+             if(greeting){
+                log(INFO, "greeting recieved");
+             }
+         }else {
+             // parse_response();
+         }
         
-    // } 
+     }
 
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1)
@@ -1000,7 +1000,9 @@ void parse_command(char * ptr){
 
 bool parse_greeting(char * response, struct selector_key *key)
 {
-    if(strcmp(*response, "+") == 0){
+
+    if(response[0] == '+')
+    {
         ATTACHMENT(key)->was_greeted = true;
         return true;
     }
