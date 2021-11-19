@@ -48,7 +48,7 @@ static const struct fd_handler cmd_handler = {
         .handle_block  = NULL,
 };
 
-enum extern_cmd_status socket_forwarding_cmd (struct selector_key * key, char *cmd);
+enum extern_cmd_status socket_forwarding_cmd(struct selector_key *key, char * cmd);
 
 void env_var_init(char *username);
 

@@ -173,23 +173,17 @@ resolve_done(struct selector_key * key);
 static void *
 resolve_blocking(void * data);
 
-void
-extern_cmd_init(struct selector_key *key);
+static void
+extern_cmd_init(const unsigned state, struct selector_key *key);
 
 static void
-extern_cmd_close(struct selector_key *key);
+extern_cmd_close(const unsigned state, struct selector_key *key);
 
-static int
+static unsigned
 extern_cmd_read(struct selector_key *key);
 
-static int
+static unsigned
 extern_cmd_write(struct selector_key *key);
-
-enum extern_cmd_status socket_forwarding_cmd (struct selector_key * key, char *cmd);
-void env_var_init(char *username);
-void cmd_write(struct selector_key *);
-void cmd_read(struct selector_key *);
-void cmd_close(struct selector_key *);
 
 void parse_command(char * command);
 void parse_response(char * command);
@@ -1139,8 +1133,8 @@ char * parse_user(char * ptr){
 //-----------------------------------------------------------------------------------------------------------------
 //                                      EXTERN COMMAND
 //-----------------------------------------------------------------------------------------------------------------
-void
-extern_cmd_init(struct selector_key *key) {
+static void
+extern_cmd_init(const unsigned state, struct selector_key *key) {
     struct extern_cmd * extern_cmd = &ATTACHMENT(key)->extern_cmd;
 
     extern_cmd->done_read    = false;
@@ -1164,7 +1158,7 @@ extern_cmd_init(struct selector_key *key) {
     char *          ptr;
     size_t          count;
     buffer  *       buff  = extern_cmd->write_buffer;
-    const char *    err_msg = "extern_cmd_init(), extern command error\r\n";
+    const char err_msg[] = "extern_cmd_init(), extern command error";
     ptr = (char*) buffer_write_ptr(buff, &count);
 
     extern_cmd->status = socket_forwarding_cmd(key, opt.cmd);
@@ -1181,7 +1175,7 @@ extern_cmd_init(struct selector_key *key) {
 }
 
 static void
-extern_cmd_close(struct selector_key * key) {
+extern_cmd_close(const unsigned state, struct selector_key * key) {
     struct extern_cmd * extern_cmd  = &ATTACHMENT(key)->extern_cmd;
 
     selector_unregister_fd(key->s, *extern_cmd->read_fd);
@@ -1191,14 +1185,14 @@ extern_cmd_close(struct selector_key * key) {
     close(*extern_cmd->write_fd);
 }
 
-static int
+static unsigned
 extern_cmd_read(struct selector_key *key) {
    // TODO read
    int rsp;
     return rsp;
 }
 
-static int
+static unsigned
 extern_cmd_write(struct selector_key * key) {
     // TODO write
     int rsp;
@@ -1237,9 +1231,9 @@ main(const int argc, char **argv) {
     metrics = init_metrics();
 
     int proxy_fd = create_proxy_socket(addr, opt);
-    int admin_fd = init_socket_admin(&admin_addr, &admin_addr_length, opt);
+//    int admin_fd = init_socket_admin(&admin_addr, &admin_addr_length, opt);
 
-    if(proxy_fd == -1 || admin_fd == -1)
+//    if(proxy_fd == -1 || admin_fd == -1)
     {
         goto finally;
     }
@@ -1254,10 +1248,10 @@ main(const int argc, char **argv) {
         err_msg = "getting server socket flags";
         goto finally;
     }
-    if(selector_fd_set_nio(admin_fd) == -1) {
-        err_msg = "getting admin socket flags";
-        goto finally;
-    }
+//    if(selector_fd_set_nio(admin_fd) == -1) {
+//        err_msg = "getting admin socket flags";
+//        goto finally;
+//    }
     const struct selector_init conf = {
         .signal = SIGALRM,
         .select_timeout = {
@@ -1281,7 +1275,7 @@ main(const int argc, char **argv) {
         .handle_close      = NULL, // nada que liberar
     };
     const struct fd_handler passive_accept_handler_admin = {
-        .handle_read       = resolve_sctp_client(&admin_addr, &admin_addr_length, metrics),
+        //.handle_read       = resolve_sctp_client(&admin_addr, &admin_addr_length, metrics),
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };

@@ -3,7 +3,7 @@ PROXY_SOURCES = proxytcp buffer args selector stm util metrics
 LIBS =  logger
 CC_C = gcc
 PTHREADFLAG = -pthread
-CFLAGS = -Wall -fsanitize=address -g
+CFLAGS = -Wall -fsanitize=address -g -Wno-unused-variable -Wno-unused-but-set-variable
 
 all: proxy-server
 

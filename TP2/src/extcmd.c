@@ -21,8 +21,7 @@ void env_var_init(char *username) {
     }
 }
 
-enum extern_cmd_status
-add_to_selector(struct selector_key * key, int pipe_out[2], int pipe_in[2]) {
+static enum extern_cmd_status add_to_selector(struct selector_key * key, int pipe_out[2], int pipe_in[2]) {
     struct pop3 * data = ATTACHMENT(key);
 
     if (selector_register(key->s, pipe_out[READ], &cmd_handler, OP_READ, data) == 0 &&
@@ -48,8 +47,7 @@ add_to_selector(struct selector_key * key, int pipe_out[2], int pipe_in[2]) {
 }
 
 /* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
-enum extern_cmd_status
-socket_forwarding_cmd (struct selector_key * key, char *cmd) {
+enum extern_cmd_status socket_forwarding_cmd (struct selector_key * key, char *cmd) {
     int n, i;
     const size_t BUFFER_SIZE = 2048;
     char buffer[BUFFER_SIZE];
@@ -98,13 +96,13 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
     }
 }
 
-void
+static void
 cmd_close(struct selector_key * key) {
     // TODO algo mas aca??
     close(key->fd);
 }
 
-void
+static void
 cmd_write(struct selector_key * key) {
     struct extern_cmd *extern_cmd  = &ATTACHMENT(key)->extern_cmd;
 
@@ -150,7 +148,8 @@ cmd_write(struct selector_key * key) {
     }
 }
 
-void cmd_read(struct selector_key * key) {
+static void
+cmd_read(struct selector_key * key) {
     uint8_t * ptr;
     size_t    count;
     ssize_t   n;
