@@ -8,6 +8,7 @@
 
 #include "include/args.h"
 #include "include/logger.h"
+#include "include/main.h"
 
 static unsigned short
 port(const char *s) {
@@ -40,7 +41,7 @@ user(char *s, struct users *user) {
 }
 
 /* help */
-static void
+void
 help() {
     printf(
             "USAGE\n"
@@ -90,13 +91,13 @@ help() {
     exit( EXIT_SUCCESS );
 }
 
-static void
+void
 version() {
-    printf("%s %s\n", "pop3filter", "1.0");
+    printf("%s %s\n", "pop3filter", VERSION);
     exit( EXIT_SUCCESS );
 }
 
-static void
+void
 usage(){
     printf(
             "pop3filter [-hv] [-e <file>] [-l <pop3-address>] [-L <management-address>] [-o <management-port>] [-p <local-port>] [-P <origin-port>] [-t <cmd>] origin-server\n"
