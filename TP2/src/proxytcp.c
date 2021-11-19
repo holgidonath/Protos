@@ -26,7 +26,7 @@
 #include "include/main.h"
 #include "include/util.h"
 #include "include/metrics.h"
-#include "include/socket_admin.h"
+//#include "include/socket_admin.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
@@ -158,9 +158,6 @@ static unsigned
 connection_ready(struct selector_key  *key);
 
 static unsigned
-resolve_start(struct selector_key * key);
-
-static unsigned
 resolve_done(struct selector_key * key);
 
 static void *
@@ -175,12 +172,10 @@ static const struct state_definition client_statbl[] =
 {
     {
         .state            = RESOLVE_ORIGIN,
-        // .on_write_ready   = resolve_start,
         .on_block_ready   = resolve_done,
     },
     {
         .state = CONNECT,
-//        .on_arrival = origin_connect,
         .on_write_ready = connection_ready,
 
     },
@@ -392,9 +387,7 @@ new_connection(int client_fd)
 {
     struct connection * con;
     con = malloc(sizeof(*con));
-    // if (connections == NULL){
-    //     connections = con;
-    // }
+
     if (con != NULL)
     {
         memset(con, 0x00, sizeof(*con));
@@ -405,7 +398,7 @@ new_connection(int client_fd)
         con->stm    .initial = RESOLVE_ORIGIN;
         con->stm    .max_state = PERROR;
         con->stm    .states = proxy_describe_states();
-        //con->next           = NULL;
+
         con->references = 1;
         con->was_greeted = false;
         stm_init(&con->stm);
@@ -413,15 +406,10 @@ new_connection(int client_fd)
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
     }
-    // struct connection * aux = connections;
-    // while (aux->next != NULL)
-    // {
-    //     aux = aux->next;
-    // }
-    // aux->next = con;
+
     metrics->concurrent_connections++;
     metrics->total_connections++;
-    //log(INFO, "estado actual: %s\n", stm_state(&con->stm));
+
     return con;
 }
 
@@ -465,9 +453,8 @@ static unsigned origin_connect(struct selector_key * key) {
 
     struct connection * con = ATTACHMENT(key);
     enum proxy_states stm_next_status = CONNECT;
-//    bool connected = false;
     con->origin_fd = socket(con->origin_data.origin_domain, SOCK_STREAM, 0);
-//    setsockopt(con->origin_fd, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
     if (con->origin_fd < 0) {
         perror("socket() failed");
         goto error;
@@ -477,16 +464,11 @@ static unsigned origin_connect(struct selector_key * key) {
         goto error;
     }
 
-//    if (connect(sock,
-//                (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
-//                ATTACHMENT(key)->origin_addr_len
-//    ) == -1
 
     log(INFO, "Attempting to connect to origin");
     if(con->origin_data.origin_type == ADDR_DOMAIN) {
         char *str;
         struct sockaddr_in *addr;
-        // sprintf(str, "%s", connection->origin_resolution->ai_canonname);
 
             addr = con->origin_resolution->ai_addr;
             str = inet_ntoa((struct in_addr) addr->sin_addr);
@@ -528,10 +510,9 @@ static unsigned origin_connect(struct selector_key * key) {
                     ATTACHMENT(key)->references += 1;
 
                  } 
-                 //else {
-                //     goto error;
-                // }
-            } else {
+
+            }
+        else {
                 // Caso que conecte de una, CREO que no deberiamos tirar abort porque si entramos aca ya conecto
                 // abort();
             }
@@ -567,11 +548,7 @@ proxy_tcp_connection(struct selector_key *key)
         goto fail;
     }
     struct connection *connection = new_connection(client);
-    //log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
     if(connection == NULL) {
-        // sin un estado, nos es imposible manejaro.
-        // tal vez deberiamos apagar accept() hasta que detectemos
-        // que se liberó alguna conexión.
         goto fail;
     }
 
@@ -579,23 +556,12 @@ proxy_tcp_connection(struct selector_key *key)
     memcpy(&connection->client_addr, &client_addr, client_addr_len);
     connection->client_addr_len = client_addr_len;
 
-    // Falta ver todo lo de la STM en struct connection
-
     set_origin_address(&connection->origin_data, opt.origin_server);
 
     if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
         goto fail;
     }
-//		TODO: falta guardarse en la estructura origin los datos del sv a conectarse
-//    if(inet_pton(AF_INET, opt.origin_server, &(((struct sockaddr_in *)(&ATTACHMENT(key)->origin_addr))->sin_addr))<=0)
-//	{
-//		goto fail;
-//	}
-//    ATTACHMENT(key)->origin_addr_len = (socklen_t)sizeof(struct sockaddr_in);
 
-    //TODO: HABRIA QUE CHEQUEAR SI IR A RESOLV_BLOCK O NO
-    //TODO: HABRIA QUE ASIGNAR BIEN ESTRUCTURA CONNECTION
-    //TODO: HABRIA QUE VER ESTADO INICIAL REQUEST_RESOLV Y MANEJO DE ESTADOS
 
     key->data = connection;
     if (connection->origin_data.origin_type != ADDR_DOMAIN)
@@ -608,25 +574,20 @@ proxy_tcp_connection(struct selector_key *key)
     {
 
         struct selector_key* new_key = malloc(sizeof(*key));
-        // memcpy(new_key, key, sizeof(*new_key));
 
         new_key->s = key->s;
         new_key->fd = client;
         new_key->data = connection;
 
         
-        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) 
-        {
-            
-            // selector_set_interest_key(key, OP_NOOP);
-            // pthread_join(thread_id, NULL);
-        } else 
+        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) == -1 )
         {
             log(ERROR, "function resolve_start, pthread_create error.");
         }
+
     }
     
-    // log(INFO, "estado actual: %s\n", stm_state(&connection->stm));
+
     return;
 
 fail:
@@ -699,28 +660,28 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.mgmt_port);
 
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
+    const int admin = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+    if(admin < 0) {
        perror("unable to create management socket");
         return -1;
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", opt.mgmt_port);
+    fprintf(stdout, "Listening on SCTP port %d\n", opt.mgmt_port);
 
     // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    setsockopt(admin, IPPROTO_SCTP, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+    if(bind(admin, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
         perror("unable to bind management socket");
         return -1;
     }
 
-    if (listen(server, 20) < 0) {
+    if (listen(admin, 20) < 0) {
         perror("unable to listen in management socket");
         return -1;
     }
 
-    return server;
+    return admin;
 }
 
 
@@ -1101,6 +1062,76 @@ char * parse_user(char * ptr){
     }
     return buff;
 }
+
+//-----------------------------------------------------------------------------------------------------------------
+//                                          ADMIN
+//----------------------------------------------------------------------------------------------
+
+void
+admin_connection(struct selector_key *key)
+{
+    struct sockaddr_storage       client_addr;
+    socklen_t                     client_addr_len = sizeof(client_addr);
+    pthread_t thread_id;
+
+
+    const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
+    if(client == -1) {
+        goto fail;
+    }
+    if(selector_fd_set_nio(client) == -1) {
+        goto fail;
+    }
+    struct connection *connection = new_connection(client);
+    if(connection == NULL) {
+        goto fail;
+    }
+
+
+    memcpy(&connection->client_addr, &client_addr, client_addr_len);
+    connection->client_addr_len = client_addr_len;
+
+    set_origin_address(&connection->origin_data, opt.origin_server);
+
+    if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
+        goto fail;
+    }
+
+
+    key->data = connection;
+    if (connection->origin_data.origin_type != ADDR_DOMAIN)
+    {
+        connection->stm.initial = origin_connect(key);
+
+    }
+
+    else
+    {
+
+        struct selector_key* new_key = malloc(sizeof(*key));
+
+        new_key->s = key->s;
+        new_key->fd = client;
+        new_key->data = connection;
+
+
+        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) == -1 )
+        {
+            log(ERROR, "function resolve_start, pthread_create error.");
+        }
+
+    }
+
+
+    return;
+
+    fail:
+    if(client != -1) {
+        close(client);
+    }
+}
+
+
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
 //-----------------------------------------------------------------------------------------------------------------
@@ -1127,22 +1158,17 @@ main(const int argc, char **argv) {
 
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
-    struct sockaddr_in admin_addr;
     socklen_t admin_addr_length;
 
     metrics = init_metrics();
 
     int proxy_fd = create_proxy_socket(addr, opt);
-//    int admin_fd = init_socket_admin(&admin_addr, &admin_addr_length, opt);
+    int admin_fd = create_management_socket(mngmt_addr, opt);
 
-//    if(proxy_fd == -1 || admin_fd == -1)
-//    {
-//        goto finally;
-//    }
-   if(proxy_fd == -1)
-   {
-      goto finally;
-   }
+    if(proxy_fd == -1 || admin_fd == -1)
+    {
+        goto finally;
+    }
 
 
     // registrar sigterm es útil para terminar el programa normalmente.
@@ -1154,10 +1180,10 @@ main(const int argc, char **argv) {
         err_msg = "getting server socket flags";
         goto finally;
     }
-//    if(selector_fd_set_nio(admin_fd) == -1) {
-//        err_msg = "getting admin socket flags";
-//        goto finally;
-//    }
+    if(selector_fd_set_nio(admin_fd) == -1) {
+        err_msg = "getting admin socket flags";
+        goto finally;
+    }
     const struct selector_init conf = {
         .signal = SIGALRM,
         .select_timeout = {
@@ -1180,11 +1206,11 @@ main(const int argc, char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
-//    const struct fd_handler passive_accept_handler_admin = {
-//        .handle_read       = resolve_sctp_client(&admin_addr, &admin_addr_length, metrics),
-//        .handle_write      = NULL,
-//        .handle_close      = NULL, // nada que liberar
-//    };
+    const struct fd_handler admin_handler = {
+        .handle_read       = admin_connection,
+        .handle_write      = NULL,
+        .handle_close      = NULL, // nada que liberar
+    };
 
 
     ss = selector_register(selector, proxy_fd, &passive_accept_handler,
@@ -1193,12 +1219,12 @@ main(const int argc, char **argv) {
         err_msg = "registering fd";
         goto finally;
     }
-//    ss = selector_register(selector, admin_fd, &passive_accept_handler_admin,
-//                                              OP_READ, NULL);
-//    if(ss != SELECTOR_SUCCESS) {
-//        err_msg = "registering admin_fd";
-//        goto finally;
-//    }
+    ss = selector_register(selector, admin_fd, &admin_handler,
+                                              OP_READ, NULL);
+    if(ss != SELECTOR_SUCCESS) {
+        err_msg = "registering admin_fd";
+        goto finally;
+    }
     for(;!done;) {
         err_msg = NULL;
         ss = selector_select(selector);
@@ -1228,16 +1254,15 @@ finally:
     }
     selector_close();
 
-    // socksv5_pool_destroy();
 
     free_metrics(metrics);
 
     if(proxy_fd >= 0) {
         close(proxy_fd);
     }
-//    if(admin_fd >= 0) {
-//        close(admin_fd);
-//    }
+    if(admin_fd >= 0) {
+        close(admin_fd);
+    }
     return ret;
 }
 
