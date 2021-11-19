@@ -36,8 +36,17 @@
 #define RE                  22          //a partir del 20 para poder usar tranquilamente constantes que necesitemos 
 #define RET                 23
 #define RETR                24
-#define DONERETR            25
-#define FORWARD             26
+#define U                   25
+#define US                  26
+#define USE                 27
+#define USER                28
+#define C                   29
+#define CA                  30
+#define CAP                 31
+#define CAPA                32
+#define DONEUSER            33
+#define DONERETR            34
+#define FORWARD             35
 
 
 typedef enum address_type {
@@ -158,6 +167,7 @@ resolve_blocking(void * data);
 void parse_command(char * command);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
+char * parse_user(char * ptr);
 
 static const struct state_definition client_statbl[] = 
 {
@@ -957,6 +967,10 @@ void parse_command(char * ptr){
            case BEGIN:
            if(ptr[i] == 'R'){
                state = R;
+           }else if(ptr[i] == 'U'){
+               state = U;
+           }else if(ptr[i] == 'C'){
+               state = C;
            }else{
                state = FORWARD;
            }
@@ -989,8 +1003,65 @@ void parse_command(char * ptr){
                state = FORWARD;
            }
            break;
+           case U:
+           if(ptr[i] == 'S'){
+               state = US;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case US:
+           if(ptr[i] == 'E'){
+               state = USE;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case USE:
+           if(ptr[i] == 'R'){
+               state = USER;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case USER:
+           if(ptr[i] == ' '){
+               state = DONEUSER;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case C:
+           if(ptr[i] == 'A'){
+               state = CA;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case CA:
+           if(ptr[i] == 'P'){
+               state = CAP;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case CAP:
+           if(ptr[i] == 'A'){
+               state = CAPA;
+           }else{
+               state = FORWARD;
+           }
+           break;
+           case CAPA:
+           log(INFO, "CAPA requested");
+           state = FORWARD;
+           break;
            case DONERETR:
            log(INFO, "RETR was found");
+           state = FORWARD;
+           break;
+           case DONEUSER:
+           log(INFO, "user %s tried to login", parse_user(ptr));
            state = FORWARD;
            break;
         }
@@ -1007,6 +1078,18 @@ bool parse_greeting(char * response, struct selector_key *key)
         return true;
     }
     return false;
+}
+
+char * parse_user(char * ptr){
+    int i = 5;
+    int idx = 0;
+    char * buff[1024];
+    while (ptr[i] != '\n') {
+        buff[idx] = ptr[i];
+        i++;
+        idx++;
+    }
+    return buff;
 }
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
