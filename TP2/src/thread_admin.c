@@ -16,7 +16,7 @@ typedef struct thread_args * thread_args_t
 struct thread_args {
 	pthread_t p_id;
 	int admin_fd;
-	struct sockadde_in * admin_addr;
+	struct sockaddr_in * admin_addr;
 	socklen_t * admin_addr_length;
 	metrics_t metrics;
 };
@@ -36,7 +36,7 @@ void resolve_admin_fd_thread(int admin_fd, struct sockaddr_in * admin_addr, sock
 	thread_args->metrics = metrics;
 
 	pthread_t thread;
-	if(pthread_creat(&thread, NULL, resolve_admin_thread, (void *)thread_args) == -1) {
+	if(pthread_create(&thread, NULL, resolve_admin_thread, (void *)thread_args) == -1) {
 		perror("Error creating admin thread");
 		exit(EXIT_FAILURE);
 	}

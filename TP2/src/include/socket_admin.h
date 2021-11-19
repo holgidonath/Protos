@@ -12,13 +12,15 @@
 #define MAX_STREAMS 1
 #define MAX_ATTEMPTS 5
 #define MAX_INT_DIGITS 10
+#define MANAGMENT_ADDR "127.0.0.1"
+#define MANAGMENT_PORT 9090
 
 enum requests {
 	LOGIN = 0,
 	LOGOUT,
-	GET_CURRENT_CONNECTIONS,
+	GET_CONCURRENT_CONNECTIONS,
 	GET_TOTAL_CONNECTIONS,
-	GET_TOTAL_BYTES
+	GET_BYTES_TRANSFERED
 };
 
 enum responses {
@@ -26,7 +28,7 @@ enum responses {
 	ERR
 };
 
-int init_socket(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length);
+int init_socket_admin(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, struct opt opt);
 void resolve_admin_client(int admin_fd, fd_set * read_fds, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
 void resolve_sctp_client(int admin_fd, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
 

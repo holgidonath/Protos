@@ -17,7 +17,7 @@ int bind_admin(int admin_fd, struct sockaddr_in * admin_addr, size_t admin_addr_
 int set_socket_options(int admin_fd, int level, int option_name, void * option_value, socklen_t option_length);
 int listen_admin(int admin_fd, int max_connections);
 
-int init_socket(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length) {
+int init_socket_admin(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, struct opt opt) {
 	int admin_fd;
 	struct sctp_initmsg init_msg;
 
@@ -25,15 +25,15 @@ int init_socket(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length) 
 	admin_fd = create_socket();
 
 	admin_addr->sin_family = AF_INET;
-	if(strcmp(metrics->managment_addr, "loopback") == 0) {
+	if(strcmp(opt.mgmt_addr, "loopback") == 0) {
 		admin_addr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-	} else if(strcmp(metrics->managment_addr, "any") == 0) {
+	} else if(strcmp(opt.mgmt_addr, "any") == 0) {
 		admin_addr->sin_addr.s_addr = htonl(INADDR_ANY);
 	} else {
-		inet_pton(AF_INET, metrics->managment_addr, &(admin_addr->sin_addr));
+		inet_pton(AF_INET, opt.mgmt_addr, &(admin_addr->sin_addr));
 	}
 
-	admin_addr->sin_port = htons(metrics->managment_port);
+	admin_addr->sin_port = htons(opt.mgmt_port);
 	bind_admin(admin_fd, admin_addr, sizeof(*admin_addr));
 	memset(&init_msg, 0, sizeof(init_msg));
 	init_msg.sinit_num_ostreams = MAX_STREAMS;
@@ -120,7 +120,7 @@ void resolve_sctp_client(int admin_fd, struct sockaddr_in * admin_addr, socklen_
 			break;
 		} else {
 			log_message(false, "Successfully received request from admin");
-			stop = commnads(&logged, request, request_length, response, &response_length, settings, metrics);
+			stop = requests(&logged, request, request_length, response, &response_length, settings, metrics);
 		}
 
 		if(request_length != 0) {

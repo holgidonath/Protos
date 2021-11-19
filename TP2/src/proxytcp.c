@@ -26,6 +26,7 @@
 #include "include/main.h"
 #include "include/util.h"
 #include "include/metrics.h"
+#include "include/socket_admin.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
@@ -1128,13 +1129,15 @@ main(const int argc, char **argv) {
 
     struct sockaddr_in addr;
     struct sockaddr_in mngmt_addr;
+    struct sockaddr_in admin_addr;
+    socklen_t admin_addr_length;
 
     metrics = init_metrics();
 
     int proxy_fd = create_proxy_socket(addr, opt);
-    // int admin_fd = create_management_socket(mngmt_addr,opt);
+    int admin_fd = init_socket_admin(&admin_addr, &admin_addr_length, opt);
 
-    if(proxy_fd == -1 ) //o admin_fd
+    if(proxy_fd == -1 || admin_fd == -1)
     {
         goto finally;
     }
@@ -1147,6 +1150,10 @@ main(const int argc, char **argv) {
 
     if(selector_fd_set_nio(proxy_fd) == -1) {
         err_msg = "getting server socket flags";
+        goto finally;
+    }
+    if(selector_fd_set_nio(admin_fd) == -1) {
+        err_msg = "getting admin socket flags";
         goto finally;
     }
     const struct selector_init conf = {
@@ -1171,13 +1178,23 @@ main(const int argc, char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
-
+    const struct fd_handler passive_accept_handler_admin = {
+        .handle_read       = resolve_sctp_client(&admin_addr, &admin_addr_length, metrics),
+        .handle_write      = NULL,
+        .handle_close      = NULL, // nada que liberar
+    };
 
 
     ss = selector_register(selector, proxy_fd, &passive_accept_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering fd";
+        goto finally;
+    }
+    ss = selector_register(selector, admin_fd, &passive_accept_handler_admin,
+                                              OP_READ, NULL);
+    if(ss != SELECTOR_SUCCESS) {
+        err_msg = "registering admin_fd";
         goto finally;
     }
     for(;!done;) {
@@ -1215,6 +1232,9 @@ finally:
 
     if(proxy_fd >= 0) {
         close(proxy_fd);
+    }
+    if(admin_fd >= 0) {
+        close(admin_fd);
     }
     return ret;
 }

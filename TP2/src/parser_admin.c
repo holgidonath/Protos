@@ -14,14 +14,14 @@ bool requests(bool * logged, char request[BUFFER_MAX], int request_length, char 
 		case LOGOUT:
 			logout(response, response_length);
 			ret = true;
-		case GET_CURRENT_CONNECTIONS:
-			get_current_connections(logged, response, response_length, metrics);
+		case GET_concurrent_connections:
+			get_concurrent_connections(logged, response, response_length, metrics);
 			break;
 		case GET_TOTAL_CONNECTIONS:
 			get_total_connections(logged, response, response_length, metrics);
 			break;
-		case GET_TOTAL_BYTES:
-			get_total_bytes(logged, response, response_length, metrics);
+		case GET_bytes_transfered:
+			get_bytes_transfered(logged, response, response_length, metrics);
 		default:
 			error(response, response_length);
 			break;
@@ -52,10 +52,10 @@ void logout(char response[BUFFER_MAX], int * response_length) {
 	ok(response, response_length);
 }
 
-void get_current_connections(bool * logged, char response[BUFFER_MAX], int * response_length, metrics_t metrics) {
+void get_concurrent_connections(bool * logged, char response[BUFFER_MAX], int * response_length, metrics_t metrics) {
 	if(* logged) {
 		ok(response, response_length);
-		sprintf(response + 1, "%d", metrics->current_connections);
+		sprintf(response + 1, "%d", metrics->concurrent_connections);
 		* response_length += strlen(response +1) + 1;
 	} else {
 		error(response, response_length);
@@ -72,10 +72,10 @@ void get_total_connections(bool * logged, char response[BUFFER_MAX], int * respo
 	}
 }
 
-void get_total_bytes(bool * logged, char response[BUFFER_MAX], int * response_length, metrics_t metrics) {
+void get_bytes_transfered(bool * logged, char response[BUFFER_MAX], int * response_length, metrics_t metrics) {
 	if(* logged) {
 		ok(response, response_length);
-		sprintf(response + 1, "%d", metrics->total_bytes);
+		sprintf(response + 1, "%d", metrics->bytes_transfered);
 		* response_length += strlen(response +1) + 1;
 	} else {
 		error(response, response_length);
