@@ -26,6 +26,7 @@
 #include "include/main.h"
 #include "include/util.h"
 #include "include/metrics.h"
+#include "include/proxyadmin.h"
 //#include "include/socket_admin.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
@@ -323,6 +324,7 @@ proxy_destroy(struct connection * con){
         // }
         if(con->references == 1){
             free(con);
+            metrics->concurrent_connections--;
         } else {
             con->references -= 1;
         }
@@ -361,7 +363,7 @@ proxy_done(struct selector_key* key) {
       }
 
       close(fds[i]);
-        metrics->concurrent_connections--;
+
     }
 
   }
@@ -1063,74 +1065,6 @@ char * parse_user(char * ptr){
     return buff;
 }
 
-//-----------------------------------------------------------------------------------------------------------------
-//                                          ADMIN
-//----------------------------------------------------------------------------------------------
-
-void
-admin_connection(struct selector_key *key)
-{
-    struct sockaddr_storage       client_addr;
-    socklen_t                     client_addr_len = sizeof(client_addr);
-    pthread_t thread_id;
-
-
-    const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
-    if(client == -1) {
-        goto fail;
-    }
-    if(selector_fd_set_nio(client) == -1) {
-        goto fail;
-    }
-    struct connection *connection = new_connection(client);
-    if(connection == NULL) {
-        goto fail;
-    }
-
-
-    memcpy(&connection->client_addr, &client_addr, client_addr_len);
-    connection->client_addr_len = client_addr_len;
-
-    set_origin_address(&connection->origin_data, opt.origin_server);
-
-    if(SELECTOR_SUCCESS != selector_register(key->s, client, &proxy_handler, OP_READ, connection)) {
-        goto fail;
-    }
-
-
-    key->data = connection;
-    if (connection->origin_data.origin_type != ADDR_DOMAIN)
-    {
-        connection->stm.initial = origin_connect(key);
-
-    }
-
-    else
-    {
-
-        struct selector_key* new_key = malloc(sizeof(*key));
-
-        new_key->s = key->s;
-        new_key->fd = client;
-        new_key->data = connection;
-
-
-        if( pthread_create(&thread_id, 0, resolve_blocking, new_key) == -1 )
-        {
-            log(ERROR, "function resolve_start, pthread_create error.");
-        }
-
-    }
-
-
-    return;
-
-    fail:
-    if(client != -1) {
-        close(client);
-    }
-}
-
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
@@ -1206,7 +1140,7 @@ main(const int argc, char **argv) {
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
     };
-    const struct fd_handler admin_handler = {
+    const struct fd_handler passive_admin_handler = {
         .handle_read       = admin_connection,
         .handle_write      = NULL,
         .handle_close      = NULL, // nada que liberar
@@ -1219,7 +1153,7 @@ main(const int argc, char **argv) {
         err_msg = "registering fd";
         goto finally;
     }
-    ss = selector_register(selector, admin_fd, &admin_handler,
+    ss = selector_register(selector, admin_fd, &passive_admin_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering admin_fd";
