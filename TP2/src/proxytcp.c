@@ -60,6 +60,12 @@ const char *appname;
 
 static metrics_t metrics;
 
+char * get_stats(void)
+{
+    char * to_ret = malloc(100); //TODO: free este string
+    sprintf(to_ret, "Total Connections: %d\nConcurrent Connections: %d\nTotal Bytes Transferred: %d\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
+    return to_ret;
+}
 // typedef struct client
 // {
 
@@ -141,9 +147,6 @@ static const struct state_definition client_statbl[] =
 
     },
     {
-        .state = GREETING,
-    },
-    {
         .state            = EXTERN_CMD,
         .on_arrival       = extern_cmd_init,
         .on_read_ready    = extern_cmd_read,
@@ -175,6 +178,8 @@ proxy_describe_states(void)
 struct opt * get_opt(void){
     return &opt;
 }
+
+
 
 void 
 set_origin_address(struct address_data * address_data, const char * adress) 
@@ -661,24 +666,7 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 //-----------------------------------------------------------------------------------------------------------------
 //                                          RESOLVE_ORIGIN FUNCTIONS
 //----------------------------------------------------------------------------------------------------------------
-static unsigned
-resolve_start(struct selector_key *key) {
-    enum proxy_states stm_next_status = ERROR;
 
-    struct selector_key* new_key = safe_malloc(sizeof(*key));
-    memcpy(new_key, key, sizeof(*new_key));
-
-    pthread_t thread_id;
-    if( pthread_create(&thread_id, 0, resolve_blocking, new_key) != -1 ) {
-        stm_next_status = RESOLVE_ORIGIN;
-        selector_set_interest_key(key, OP_NOOP);
-        pthread_join(thread_id, NULL);
-    } else {
-        log(ERROR, "function resolve_start, pthread_create error.");
-    }
-
-    return stm_next_status;
-}
 
 static void *
 resolve_blocking(void * data) {

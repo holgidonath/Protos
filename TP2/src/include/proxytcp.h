@@ -18,6 +18,7 @@
 /*                     PROTOTYPES                       */
 /* ==================================================== */
 struct opt * get_opt(void);
+char * get_stats(void);
 
 /* ==================================================== */
 /*                     STATES                           */
@@ -26,7 +27,6 @@ enum proxy_states
 {
     RESOLVE_ORIGIN = 0,
     CONNECT,
-    GREETING,
     EXTERN_CMD,
     COPY,
     DONE,
@@ -93,5 +93,7 @@ struct connection
     int                     extern_read_fd;
     int                     extern_write_fd;
 };
+
+
 
 #endif //PROTOS_PROXYTCP_H
