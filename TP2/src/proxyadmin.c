@@ -59,7 +59,7 @@ static unsigned
 readfromclient(struct selector_key* key);
 
 static unsigned greet(struct selector_key *key);
-
+static unsigned recieve_from_client(struct selector_key * key);
 static void hop(const unsigned state, struct selector_key *key);
 
 static unsigned authenticate(struct selector_key * key);
@@ -277,6 +277,24 @@ static unsigned greeting(struct selector_key* key){
     memcpy(ptr, greeting, greeting_size);
     buffer_write_adv(buff, greeting_size);
     int n = send_to_client(key);
+    
+    return n;
+}
+
+static unsigned incorrect_pass(struct selector_key* key){
+
+    admin * admin = ATTACHMENT(key);
+    size_t auth_error_size;
+    buffer * buff = &admin->write_buffer;
+    size_t buff_size;
+
+    char * auth_error = "Incorrect Password!\nTry again: ";
+    auth_error_size = strlen(auth_error);
+
+    uint8_t  * ptr = buffer_write_ptr(buff, &buff_size);
+    memcpy(ptr, auth_error, auth_error_size);
+    buffer_write_adv(buff, auth_error_size);
+    int n = send_to_client(key);
 
 
 //    selector_set_interest(key->s, admin->client_fd, OP_READ);
@@ -303,10 +321,31 @@ hop(const unsigned state, struct selector_key* key)
 static unsigned
 authenticate(struct selector_key * key)
 {
-    
+    size_t size;
+    buffer * buff = &ATTACHMENT(key)->read_buffer;
+    char * login_key = "password";
+    int bytes = recieve_from_client(key);
+
+    uint8_t * ptr = buffer_read_ptr(buff,&size);
+    if(strncmp(login_key, ptr, strlen(login_key)) == 0)
+    {
+        log(INFO, "Correct key");
+        buffer_read_adv(buff,bytes);
+        return ADONE;
+    }
+    else
+    {
+        log(ERROR,"Incorrect key");
+        buffer_read_adv(buff,bytes);
+        incorrect_pass(key);
+        return AUTH;
+    }
+
 }
 
+
 static unsigned send_to_client(struct selector_key * key) {
+
     admin * admin = ATTACHMENT(key);
     buffer * buff = &admin->write_buffer;
     size_t size;
@@ -320,5 +359,24 @@ static unsigned send_to_client(struct selector_key * key) {
     buffer_read_adv(buff, size);
     selector_set_interest(key->s, admin->client_fd, OP_READ);
     return n;
+}
+
+static unsigned recieve_from_client(struct selector_key * key)
+{
+    admin * admin = ATTACHMENT(key);
+    buffer * buff = &admin->read_buffer;
+    size_t size;
+    int n;
+    uint8_t * ptr = buffer_write_ptr(buff, &size);
+    n = sctp_recvmsg(key->fd, ptr, size, NULL, 0, 0, 0);
+    if(n<= 0)
+    {
+        log(ERROR, "Admin Connection Terminated");
+        shutdown(admin->client_fd,SHUT_RD);
+    }
+    buffer_write_adv(buff, n);
+    selector_set_interest(key->s, admin->client_fd, OP_WRITE);
+    return n;
+
 }
 
