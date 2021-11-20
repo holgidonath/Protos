@@ -49,7 +49,7 @@ typedef struct admin
 typedef enum admin_states
 {
    GREETING,
-   HOP,
+   AUTH,
    ADONE,
    AERROR,
 
@@ -62,6 +62,8 @@ static unsigned greet(struct selector_key *key);
 
 static void hop(const unsigned state, struct selector_key *key);
 
+static unsigned authenticate(struct selector_key * key);
+static unsigned send_to_client(struct selector_key * key);
 
 static const struct state_definition client_statbl[] =
         {
@@ -71,8 +73,8 @@ static const struct state_definition client_statbl[] =
 
         },
         {
-                .state          = HOP,
-                .on_arrival     = hop,
+                .state          = AUTH,
+                .on_read_ready  = authenticate,
 
         },
         {
@@ -264,17 +266,21 @@ new_admin(int client_fd)
 static unsigned greeting(struct selector_key* key){
 
     admin * admin = ATTACHMENT(key);
-    size_t size;
+    size_t greeting_size;
+    buffer * buff = &admin->write_buffer;
+    size_t buff_size;
 
-    char * hello = "Bienvenido";
-    size = strlen(hello);
+    char * greeting = "Welcome admin!\nLogin: ";
+    greeting_size = strlen(greeting);
+
+    uint8_t  * ptr = buffer_write_ptr(buff, &buff_size);
+    memcpy(ptr, greeting, greeting_size);
+    buffer_write_adv(buff, greeting_size);
+    int n = send_to_client(key);
 
 
-    ssize_t ret = sctp_sendmsg(key->fd, hello , size,
-                               NULL, 0, 0, 0, 0, 0, 0);
-
-    selector_set_interest(key->s, admin->client_fd, OP_NOOP);
-    return ret;
+//    selector_set_interest(key->s, admin->client_fd, OP_READ);
+    return n;
 }
 
 static unsigned greet(struct selector_key* key)
@@ -284,7 +290,7 @@ static unsigned greet(struct selector_key* key)
     {
         return AERROR;
     }
-    return HOP;
+    return AUTH;
 
 }
 
@@ -292,5 +298,27 @@ static void
 hop(const unsigned state, struct selector_key* key)
 {
     log(INFO, "successful hopping");
+}
+
+static unsigned
+authenticate(struct selector_key * key)
+{
+    
+}
+
+static unsigned send_to_client(struct selector_key * key) {
+    admin * admin = ATTACHMENT(key);
+    buffer * buff = &admin->write_buffer;
+    size_t size;
+    int n;
+    uint8_t * ptr = buffer_read_ptr(buff, &size);
+     if(n = sctp_sendmsg(key->fd, ptr , size,
+                               NULL, 0, 0, 0, 0, 0, 0) < 0){
+         log(ERROR, "Error sending message to client");
+         return AERROR; //Nose si deberiamos ir a error
+     }
+    buffer_read_adv(buff, size);
+    selector_set_interest(key->s, admin->client_fd, OP_READ);
+    return n;
 }
 
