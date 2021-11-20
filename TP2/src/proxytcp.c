@@ -1161,15 +1161,13 @@ extern_cmd_close(const unsigned state, struct selector_key * key) {
 static unsigned
 extern_cmd_read(struct selector_key *key) {
    // TODO read
-   int rsp;
-    return rsp;
+    return 0;
 }
 
 static unsigned
 extern_cmd_write(struct selector_key * key) {
     // TODO write
-    int rsp;
-    return rsp;
+    return 0;
 }
 
 //-----------------------------------------------------------------------------------------------------------------

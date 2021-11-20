@@ -7,7 +7,7 @@
 #include "include/logger.h"
 #include "include/proxytcp.h"
 
-
+#define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
 
 void env_var_init(char *username) {
     char env_pop3filter_version[30];
@@ -31,11 +31,11 @@ void env_var_init(char *username) {
 }
 
 static enum extern_cmd_status add_to_selector(struct selector_key * key, int pipe_out[2], int pipe_in[2]) {
-    struct pop3 * data = ATTACHMENT(key);
+    struct connection * data = ATTACHMENT(key);
 
     if (selector_register(key->s, pipe_out[READ], &cmd_handler, OP_READ, data) == 0 &&
         selector_fd_set_nio(pipe_out[READ]) == 0) {
-        data->cmd_read_fd = pipe_out[READ];
+        data->extern_read_fd = pipe_out[READ];
     } else {
         close(pipe_out[READ]);
         close(pipe_in[WRITE]);
@@ -44,7 +44,7 @@ static enum extern_cmd_status add_to_selector(struct selector_key * key, int pip
 
     if (selector_register(key->s, pipe_in[WRITE], &cmd_handler, OP_WRITE, data) == 0 &&
         selector_fd_set_nio(pipe_in[WRITE]) == 0) {
-        data->cmd_write_fd = pipe_in[WRITE];
+        data->extern_write_fd = pipe_in[WRITE];
     } else {
         selector_unregister_fd(key->s, pipe_in[1]);
         close(pipe_out[READ]);
@@ -88,20 +88,6 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
             log(ERROR, "socket_forwarding_cmd: ")
             return CMD_STATUS_ERROR;
         }
-//        while ((n = recv(source, buffer, BUFFER_SIZE, 0)) > 0) { // read source socket --> write to buffer
-//            if (write(pipe_in[WRITE], buffer, n) < 0) {
-//                log(ERROR, "socket_forwarding_cmd: Cannot write to input pipe of external command");
-//                exit(EXIT_FAILURE);
-//            }
-//            else {
-//                log(INFO, "socket_forwarding_cmd: writing to input pipe of external command");
-//            }
-//            if ((i = read(pipe_out[READ], buffer, BUFFER_SIZE)) > 0) {
-//                log(INFO, "socket_forwarding_cmd: sending command output to destination socket...")
-//                send(destination, buffer, i, 0);
-//            }
-//        }
-
         return CMD_STATUS_OK;
     }
 }
