@@ -1019,7 +1019,7 @@ void parse_command(char * ptr){
            state = FORWARD;
            break;
            case DONEUSER:
-           log(INFO, "user %s tried to login", parse_user(ptr));
+           log(INFO, "user tried to login");
            state = FORWARD;
            break;
         }
