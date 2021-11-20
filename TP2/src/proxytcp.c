@@ -28,6 +28,7 @@
 #include "include/metrics.h"
 #include "include/proxyadmin.h"
 //#include "include/socket_admin.h"
+#include "include/extcmd.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
@@ -81,6 +82,7 @@ enum proxy_states
     RESOLVE_ORIGIN,
     CONNECT, 
     GREETING,
+    EXTERN_CMD,
     COPY,
     DONE,
     PERROR
@@ -138,6 +140,12 @@ struct connection
     socklen_t                     client_addr_len;
     unsigned                references;
     bool                    was_greeted;
+
+    struct extern_cmd       extern_cmd;
+    uint8_t                 raw_extern_read_buffer[2048];
+    buffer                  extern_read_buffer;
+    int                     extern_read_fd;
+    int                     extern_write_fd;
 };
 
 static struct connection * connections = NULL;
@@ -164,6 +172,21 @@ resolve_done(struct selector_key * key);
 static void *
 resolve_blocking(void * data);
 
+static void
+extern_cmd_init(const unsigned state, struct selector_key *key);
+
+static void
+extern_cmd_close(const unsigned state, struct selector_key *key);
+
+static unsigned
+extern_cmd_read(struct selector_key *key);
+
+static unsigned
+extern_cmd_write(struct selector_key *key);
+
+static enum extern_cmd_status
+socket_forwarding_cmd(struct selector_key *key, char * cmd);
+
 void parse_command(char * command);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
@@ -188,6 +211,13 @@ static const struct state_definition client_statbl[] =
         .on_arrival = copy_init,
         .on_read_ready = copy_r,
         .on_write_ready = copy_w,
+    },
+    {
+        .state            = EXTERN_CMD,
+        .on_arrival       = extern_cmd_init,
+        .on_read_ready    = extern_cmd_read,
+        .on_write_ready   = extern_cmd_write,
+        .on_departure     = extern_cmd_close,
     },
     {
         .state = DONE,
@@ -1065,6 +1095,75 @@ char * parse_user(char * ptr){
     return buff;
 }
 
+
+//-----------------------------------------------------------------------------------------------------------------
+//                                      EXTERN COMMAND
+//-----------------------------------------------------------------------------------------------------------------
+static void
+extern_cmd_init(const unsigned state, struct selector_key *key) {
+    struct extern_cmd * extern_cmd = &ATTACHMENT(key)->extern_cmd;
+
+    extern_cmd->done_read    = false;
+    extern_cmd->done_write   = false;
+    extern_cmd->error_write  = false;
+    extern_cmd->error_read   = false;
+
+    extern_cmd->send_bytes_write    = 0;
+    extern_cmd->send_bytes_read     = 0;
+
+    extern_cmd->read_buffer  = &ATTACHMENT(key)->write_buffer;
+    extern_cmd->write_buffer = &ATTACHMENT(key)->extern_read_buffer;
+    extern_cmd->cmd_rb       = &ATTACHMENT(key)->extern_read_buffer;
+    extern_cmd->cmd_wb       = &ATTACHMENT(key)->write_buffer;
+
+    extern_cmd->origin_fd    = &ATTACHMENT(key)->origin_fd;
+    extern_cmd->client_fd    = &ATTACHMENT(key)->client_fd;
+    extern_cmd->read_fd  = &ATTACHMENT(key)->extern_read_fd;
+    extern_cmd->write_fd = &ATTACHMENT(key)->extern_write_fd;
+
+    char *          ptr;
+    size_t          count;
+    buffer  *       buff  = extern_cmd->write_buffer;
+    const char err_msg[] = "extern_cmd_init(), extern command error";
+    ptr = (char*) buffer_write_ptr(buff, &count);
+
+    extern_cmd->status = socket_forwarding_cmd(key, opt.cmd);
+
+    if (extern_cmd->status == CMD_STATUS_ERROR) {
+        log(ERROR, err_msg)
+        buffer_write_adv(buff, strlen(err_msg));
+        selector_set_interest(key->s, *extern_cmd->client_fd, OP_WRITE);
+    }
+
+    buff = extern_cmd->read_buffer;
+
+    // TODO parsing del mail aca ?
+}
+
+static void
+extern_cmd_close(const unsigned state, struct selector_key * key) {
+    struct extern_cmd * extern_cmd  = &ATTACHMENT(key)->extern_cmd;
+
+    selector_unregister_fd(key->s, *extern_cmd->read_fd);
+    close(*extern_cmd->read_fd);
+
+    selector_unregister_fd(key->s, *extern_cmd->write_fd);
+    close(*extern_cmd->write_fd);
+}
+
+static unsigned
+extern_cmd_read(struct selector_key *key) {
+   // TODO read
+   int rsp;
+    return rsp;
+}
+
+static unsigned
+extern_cmd_write(struct selector_key * key) {
+    // TODO write
+    int rsp;
+    return rsp;
+}
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN
