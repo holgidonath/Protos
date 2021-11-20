@@ -965,91 +965,92 @@ copy_w(struct selector_key *key)
 void parse_command(char * ptr){
     int i = 0;
     int state = BEGIN;
+    char c = toupper(ptr[0]);
     while(state != FORWARD){
        switch(state){
            case BEGIN:
-           if(ptr[i] == 'R'){
+           if(c == 'R'){
                state = R;
-           }else if(ptr[i] == 'U'){
+           }else if(c == 'U'){
                state = U;
-           }else if(ptr[i] == 'C'){
+           }else if(c == 'C'){
                state = C;
            }else{
                state = FORWARD;
            }
            break;
            case R:
-           if(ptr[i] == 'E'){
+           if(c == 'E'){
                state = RE;
            }else{
                state = FORWARD;
            }
            break;
            case RE:
-           if(ptr[i] == 'T'){
+           if(c == 'T'){
                state = RET;
            }else{
                state = FORWARD;
            }
            break;
            case RET:
-           if(ptr[i] == 'R'){
+           if(c == 'R'){
                state = RETR;
            }else{
                state = FORWARD;
            }
            break;
            case RETR:
-           if(ptr[i] == ' '){
+           if(c == ' '){
                 state = DONERETR;
            } else {
                state = FORWARD;
            }
            break;
            case U:
-           if(ptr[i] == 'S'){
+           if(c == 'S'){
                state = US;
            }else{
                state = FORWARD;
            }
            break;
            case US:
-           if(ptr[i] == 'E'){
+           if(c == 'E'){
                state = USE;
            }else{
                state = FORWARD;
            }
            break;
            case USE:
-           if(ptr[i] == 'R'){
+           if(c == 'R'){
                state = USER;
            }else{
                state = FORWARD;
            }
            break;
            case USER:
-           if(ptr[i] == ' '){
+           if(c == ' '){
                state = DONEUSER;
            }else{
                state = FORWARD;
            }
            break;
            case C:
-           if(ptr[i] == 'A'){
+           if(c == 'A'){
                state = CA;
            }else{
                state = FORWARD;
            }
            break;
            case CA:
-           if(ptr[i] == 'P'){
+           if(c == 'P'){
                state = CAP;
            }else{
                state = FORWARD;
            }
            break;
            case CAP:
-           if(ptr[i] == 'A'){
+           if(c == 'A'){
                state = CAPA;
            }else{
                state = FORWARD;
@@ -1069,6 +1070,7 @@ void parse_command(char * ptr){
            break;
         }
         i++;
+        c = toupper(ptr[i]);
     }
 }
 
