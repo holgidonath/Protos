@@ -24,13 +24,13 @@ struct opt * get_opt(void);
 /* ==================================================== */
 enum proxy_states
 {
-    RESOLVE_ORIGIN,
+    RESOLVE_ORIGIN = 0,
     CONNECT,
     GREETING,
     EXTERN_CMD,
     COPY,
     DONE,
-    PERROR
+    PERROR,
 };
 
 typedef enum address_type {

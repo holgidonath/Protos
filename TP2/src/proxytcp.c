@@ -143,17 +143,17 @@ static const struct state_definition client_statbl[] =
         .state = GREETING,
     },
     {
-        .state = COPY,
-        .on_arrival = copy_init,
-        .on_read_ready = copy_r,
-        .on_write_ready = copy_w,
-    },
-    {
         .state            = EXTERN_CMD,
         .on_arrival       = extern_cmd_init,
         .on_read_ready    = extern_cmd_read,
         .on_write_ready   = extern_cmd_write,
         .on_departure     = extern_cmd_close,
+    },
+    {
+        .state = COPY,
+        .on_arrival = copy_init,
+        .on_read_ready = copy_r,
+        .on_write_ready = copy_w,
     },
     {
         .state = DONE,
@@ -390,10 +390,10 @@ static unsigned connection_ready(struct selector_key  *key){
     int error = 0;
     socklen_t len = sizeof(error);
     if (con->origin_data.origin_type == ADDR_DOMAIN) {
-        log(INFO, "con->fd = %d         key->fd = %d\n", con->origin_fd, key->fd);
+        //log(INFO, "con->fd = %d         key->fd = %d\n", con->origin_fd, key->fd);
         if (getsockopt(con->origin_fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
             if (error != 0) {
-                log(INFO, "ooooo");
+                //log(INFO, "ooooo");
                 con->origin_resolution = con->origin_resolution->ai_next;
                 selector_set_interest(key->s, key->fd, OP_NOOP);
                 return origin_connect(key);
@@ -408,7 +408,7 @@ static unsigned connection_ready(struct selector_key  *key){
     }
     else
     {
-        log(INFO, "con->fd = %d         key->fd = %d\n", con->origin_fd, key->fd);
+//        log(INFO, "con->fd = %d         key->fd = %d\n", con->origin_fd, key->fd);
         if (getsockopt(con->origin_fd, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
             if (error != 0) {
                 log(ERROR, "failed to connect to ORIGIN");
@@ -802,7 +802,7 @@ static unsigned
 copy_r(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -852,7 +852,7 @@ static unsigned
 copy_w(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-    log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
+    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
