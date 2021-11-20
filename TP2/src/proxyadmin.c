@@ -16,6 +16,7 @@
 #include <assert.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <ctype.h> // para toupper
 
 #include "include/buffer.h"
 #include "include/args.h"
@@ -46,24 +47,58 @@ typedef struct admin
 
 } admin;
 
+typedef enum command_parser_states
+{
+    BEGIN,
+    L,
+    LO,
+    LOG,
+    LOGI,
+    LOGIN,
+    S,
+    ST,
+    STA,
+    STAT,
+    G,
+    GE,
+    GET,
+    GETC,
+    GETCM,
+    GETCMD,
+    SE,
+    SET,
+    SETC,
+    SETCM,
+    SETCMD,
+    LOGO,
+    LOGOU,
+    LOGOUT,
+    ARGUMENTS,
+    INVALID,
+    CDONE,
+
+
+} command_parser_states;
+
 typedef enum admin_states
 {
    GREETING,
    AUTH,
+   COMMANDS,
    ADONE,
    AERROR,
 
 } admin_states;
 
-static unsigned
-readfromclient(struct selector_key* key);
-
 static unsigned greet(struct selector_key *key);
-
-static void hop(const unsigned state, struct selector_key *key);
+static unsigned recieve_from_client(struct selector_key * key);
+//static void hop(const unsigned state, struct selector_key *key);
 
 static unsigned authenticate(struct selector_key * key);
 static unsigned send_to_client(struct selector_key * key);
+
+static unsigned parse_command(struct selector_key * key);
+static unsigned command_response(struct selector_key * key);
 
 static const struct state_definition client_statbl[] =
         {
@@ -76,6 +111,11 @@ static const struct state_definition client_statbl[] =
                 .state          = AUTH,
                 .on_read_ready  = authenticate,
 
+        },
+        {
+                .state          = COMMANDS,
+                .on_read_ready  = parse_command,
+                .on_write_ready = command_response,
         },
         {
                 .state          = ADONE,
@@ -277,15 +317,43 @@ static unsigned greeting(struct selector_key* key){
     memcpy(ptr, greeting, greeting_size);
     buffer_write_adv(buff, greeting_size);
     int n = send_to_client(key);
+    
+    return n;
+}
 
+static unsigned pass_auth(struct selector_key* key, bool number){
 
-//    selector_set_interest(key->s, admin->client_fd, OP_READ);
+    admin * admin = ATTACHMENT(key);
+    size_t auth_error_size;
+    buffer * buff = &admin->write_buffer;
+    size_t buff_size;
+    int n;
+    if (number == 0)
+    {
+        char *auth_error = "Incorrect Password!\nTry again: ";
+        auth_error_size = strlen(auth_error);
+        uint8_t *ptr = buffer_write_ptr(buff, &buff_size);
+        memcpy(ptr, auth_error, auth_error_size);
+        buffer_write_adv(buff, auth_error_size);
+        n = send_to_client(key);
+    }
+    else
+    {
+        char *auth_error = "Login Successful\nWelcome\n";
+        auth_error_size = strlen(auth_error);
+        uint8_t *ptr = buffer_write_ptr(buff, &buff_size);
+        memcpy(ptr, auth_error, auth_error_size);
+        buffer_write_adv(buff, auth_error_size);
+        n = send_to_client(key);
+    }
+
     return n;
 }
 
 static unsigned greet(struct selector_key* key)
 {
     int status = greeting(key);
+    selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
     if (status < 0)
     {
         return AERROR;
@@ -294,19 +362,48 @@ static unsigned greet(struct selector_key* key)
 
 }
 
-static void
-hop(const unsigned state, struct selector_key* key)
-{
-    log(INFO, "successful hopping");
-}
+//static void
+//hop(const unsigned state, struct selector_key* key)
+//{
+//    log(INFO, "successful hopping");
+//}
 
 static unsigned
 authenticate(struct selector_key * key)
 {
-    
+    size_t size;
+    buffer * buff = &ATTACHMENT(key)->read_buffer;
+    char * login_key = "password";
+    int bytes = recieve_from_client(key);
+    selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+    uint8_t * ptr = buffer_read_ptr(buff,&size);
+    if(strncmp(login_key, ptr, strlen(login_key)) == 0)
+    {
+        log(INFO, "Correct key");
+        pass_auth(key,1);
+        buffer_read_adv(buff,bytes);
+        return COMMANDS;
+    }
+    else
+    {
+        log(ERROR,"Incorrect key");
+        pass_auth(key,0);
+        buffer_read_adv(buff,bytes);
+        return AUTH;
+    }
+
 }
 
+
+
+static unsigned command_response(struct selector_key * key)
+{
+
+}
+
+
 static unsigned send_to_client(struct selector_key * key) {
+
     admin * admin = ATTACHMENT(key);
     buffer * buff = &admin->write_buffer;
     size_t size;
@@ -318,7 +415,346 @@ static unsigned send_to_client(struct selector_key * key) {
          return AERROR; //Nose si deberiamos ir a error
      }
     buffer_read_adv(buff, size);
-    selector_set_interest(key->s, admin->client_fd, OP_READ);
     return n;
+}
+
+static unsigned recieve_from_client(struct selector_key * key)
+{
+    admin * admin = ATTACHMENT(key);
+    buffer * buff = &admin->read_buffer;
+    size_t size;
+    int n;
+    uint8_t * ptr = buffer_write_ptr(buff, &size);
+    n = sctp_recvmsg(key->fd, ptr, size, NULL, 0, 0, 0);
+    if(n<= 0)
+    {
+        log(ERROR, "Admin Connection Terminated");
+        shutdown(admin->client_fd,SHUT_RD);
+    }
+    buffer_write_adv(buff, n);
+    return n;
+
+}
+
+static unsigned parse_command(struct selector_key * key)
+{
+    admin * admin = ATTACHMENT(key);
+    buffer * buff = &admin->read_buffer;
+    int bytes = recieve_from_client(key);
+    size_t size;
+
+
+    uint8_t * ptr = buffer_read_ptr(buff, &size);
+    char c = toupper(*ptr);
+    command_parser_states state = BEGIN;
+    command_parser_states command;
+    char args[50];
+    int args_index = 0;
+    int i = 0;
+    while(state != INVALID && buffer_can_read(buff))
+    {
+        switch(state)
+        {
+            case BEGIN:
+                if(c == 'L')
+                {
+                    state = L;
+                }
+                else if(c == 'S')
+                {
+                    state = S;
+                }
+                else if(c == 'G')
+                {
+                    state = G;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case L:
+                if(c == 'O')
+                {
+                    state = LO;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LO:
+                if(c == 'G')
+                {
+                    state = LOG;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOG:
+                if(c == 'I')
+                {
+                    state = LOGI;
+                }
+                else if(c == 'O')
+                {
+                    state = LOGO;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOGI:
+                if(c == 'N')
+                {
+                    state = LOGIN;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOGIN:
+                if(c == ' ')
+                {
+                    state = ARGUMENTS;
+                    command = LOGIN;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOGO:
+                if(c == 'U')
+                {
+                    state = LOGOU;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOGOU:
+                if(c == 'T')
+                {
+                    state = LOGOUT;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case LOGOUT:
+                if(c == '\n') //TODO: ver si tengo que hacer para \r\n tambien o solo \n
+                {
+                    state = CDONE;
+                    command = LOGOUT;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case S:
+                if(c == 'T')
+                {
+                    state = ST;
+                }
+                else if(c == 'E')
+                {
+                    state = SE;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case SE:
+                if(c == 'T')
+                {
+                    state = SET;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case SET:
+                if(c == 'C')
+                {
+                    state = SETC;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case SETC:
+                if(c == 'M')
+                {
+                    state = SETCM;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case SETCM:
+                if(c == 'D')
+                {
+                    state = SETCMD;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case SETCMD:
+                if(c == ' ')
+                {
+                    state = ARGUMENTS;
+                    command = SETCMD;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case ST:
+                if(c == 'A')
+                {
+                    state = STA;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case STA:
+                if(c == 'T')
+                {
+                    state = STAT;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case STAT:
+                if(c == ' ')
+                {
+                    state = ARGUMENTS;
+                    command = STAT;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case G:
+                if(c == 'E')
+                {
+                    state = GE;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case GE:
+                if(c == 'T')
+                {
+                    state = GET;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case GET:
+                if(c == 'C')
+                {
+                    state = GETC;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case GETC:
+                if(c == 'M')
+                {
+                    state = GETCM;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case GETCM:
+                if(c == 'D')
+                {
+                    state = GETCMD;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case GETCMD:
+                if(c == '\n')//TODO: ver lo de \r\n que puse arriba
+                {
+                    state = CDONE;
+                    command = GETCMD;
+                }
+                else
+                {
+                    state = INVALID;
+                }
+                break;
+            case ARGUMENTS:
+                if(c != '\n')
+                {
+                    args[args_index++] = ptr[i];
+                }
+                else
+                {
+                    state = CDONE;
+                }
+                break;
+
+            case CDONE:
+                break;
+        }
+        buffer_read_adv(buff,1);
+        c = toupper(ptr[++i]);
+    }
+    buffer_read_adv(buff,bytes-i);
+
+    if(command == LOGOUT)
+    {
+        buff = &admin->write_buffer;
+        ptr = buffer_write_ptr(buff, &size);
+        char *log_out = "Loggin out...\n";
+        memcpy(ptr, log_out, strlen(log_out));
+        buffer_write_adv(buff, strlen(log_out));
+        send_to_client(key);
+        return ADONE;
+    }
+
+    if(state == INVALID) {
+        buff = &admin->write_buffer;
+        ptr = buffer_write_ptr(buff, &size);
+        char *invalid = "Invalid command\n";
+        memcpy(ptr, invalid, strlen(invalid));
+        buffer_write_adv(buff, strlen(invalid));
+        send_to_client(key);
+    }
+    return COMMANDS;
+
 }
 
