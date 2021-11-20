@@ -11,6 +11,6 @@ clean:
 	- rm -f *.o  pop3filter
 
 proxy-server:
-	$(CC_C) $(CFLAGS) $(PROXY_SOURCES:=.c) $(LIBS:=.c) -o $(PROXY_NAME) $(PTHREADFLAG)
+	$(CC_C) $(CFLAGS) $(PROXY_SOURCES:=.c) $(LIBS:=.c) -lsctp -o $(PROXY_NAME) $(PTHREADFLAG)
 
 .PHONY: clean all

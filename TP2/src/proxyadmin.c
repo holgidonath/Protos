@@ -12,6 +12,7 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <netinet/sctp.h>
 #include <assert.h>
 #include <arpa/inet.h>
 #include <pthread.h>
@@ -43,28 +44,43 @@ typedef struct admin
 //    time_t last_use;
 //    admin_state state;
 
-};
+} admin;
 
 typedef enum admin_states
 {
-   START,
+   GREETING,
+   HOP,
    ADONE,
    AERROR,
 
 } admin_states;
 
+static unsigned
+readfromclient(struct selector_key* key);
+
+static unsigned greet(struct selector_key *key);
+
+static void hop(const unsigned state, struct selector_key *key);
+
+
 static const struct state_definition client_statbl[] =
         {
         {
-                .state            = START,
+                .state          = GREETING,
+                .on_write_ready = greet,
 
         },
         {
-                .state            = ADONE,
+                .state          = HOP,
+                .on_arrival     = hop,
 
         },
         {
-                .state            = AERROR,
+                .state          = ADONE,
+
+        },
+        {
+                .state          = AERROR,
 
         }
 };
@@ -208,6 +224,7 @@ admin_connection(struct selector_key *key)
         goto fail;
     }
 
+
     return;
 
     fail:
@@ -227,8 +244,9 @@ new_admin(int client_fd)
         memset(admin, 0x00, sizeof(*admin));
 
         admin->next = 0;
+        admin->client_fd = client_fd;
 
-        admin->stm    .initial = START;
+        admin->stm    .initial = GREETING;
         admin->stm    .max_state = AERROR;
         admin->stm    .states = admin_describe_states();
 
@@ -241,3 +259,38 @@ new_admin(int client_fd)
 
     return admin;
 }
+
+
+static unsigned greeting(struct selector_key* key){
+
+    admin * admin = ATTACHMENT(key);
+    size_t size;
+
+    char * hello = "Bienvenido";
+    size = strlen(hello);
+
+
+    ssize_t ret = sctp_sendmsg(key->fd, hello , size,
+                               NULL, 0, 0, 0, 0, 0, 0);
+
+    selector_set_interest(key->s, admin->client_fd, OP_NOOP);
+    return ret;
+}
+
+static unsigned greet(struct selector_key* key)
+{
+    int status = greeting(key);
+    if (status < 0)
+    {
+        return AERROR;
+    }
+    return HOP;
+
+}
+
+static void
+hop(const unsigned state, struct selector_key* key)
+{
+    log(INFO, "successful hopping");
+}
+
