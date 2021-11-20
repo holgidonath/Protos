@@ -8,12 +8,6 @@
 
 `STAT bytes`
 
-`GET mtypes`
-
-`SET mtype [mtype]`
-
-`REMOVE mtype [mtype]`
-
 `GET cmd`
 
 `SET cmd [cmd]`
