@@ -18,6 +18,7 @@
 #include <assert.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <ctype.h> // toupper
 
 #include "include/buffer.h"
 #include "include/args.h"
@@ -814,8 +815,6 @@ copy_r(struct selector_key *key)
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
 
-    metrics->bytes_transfered += n;
-
     if(key->fd == ATTACHMENT(key)->client_fd){
         if(ptr[0] == 'R'){
             log(INFO,"possible retr found");
@@ -837,6 +836,7 @@ copy_r(struct selector_key *key)
     }
     else
     {
+        metrics->bytes_transfered += n;
         buffer_write_adv(b,n);
     }
     copy_compute_interests(key->s, d);
@@ -991,7 +991,7 @@ void parse_command(char * ptr){
            break;
            case CAP:
            if(c == 'A'){
-               state = CAPA;
+               state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
            }else{
                state = FORWARD;
            }

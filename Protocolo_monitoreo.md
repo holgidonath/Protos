@@ -2,14 +2,14 @@
 
 `LOGIN [token]` (el token lo tendría de antemano el admin)
 
-`STAT concurrent`
+`STAT con`
 
-`STAT total`
+`STAT tot`
 
-`STAT bytes`
+`STAT byt`
 
-`GET cmd`
+`GETCMD`
 
-`SET cmd [cmd]`
+`SETCMD [cmd]`
 
 `LOGOUT`
