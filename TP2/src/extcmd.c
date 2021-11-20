@@ -1,21 +1,30 @@
+#include <stdint.h>
+#include <stdio.h>
 #include "include/extcmd.h"
-#include "include/buffer.h""
+#include "include/args.h"
 #include "include/selector.h"
 #include "include/main.h"
+#include "include/logger.h"
+#include "include/proxytcp.h"
+
 
 
 void env_var_init(char *username) {
+//    char * env_pop3filter_version;
+//    char * env_pop3_server;
+//    char * env_pop3_username;
+    struct opt * opt = get_opt();
     sprintf(env_pop3filter_version, "POP3FILTER_VERSION=", VERSION);
     if(putenv(env_pop3filter_version)) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3filter_version);
     }
 
-    sprintf(env_pop3_server, "POP3_SERVER=", opt.origin_server);
+    sprintf(env_pop3_server, "POP3_SERVER=", opt->origin_server);
     if(putenv(env_pop3_server)) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
     }
 
-    sprintf(env_pop3_server, "POP3_USERNAME=", opt.origin_server);
+    sprintf(env_pop3_server, "POP3_USERNAME=", opt->origin_server);
     if(putenv(env_pop3_username)) {
         log(ERROR, "putenv() couldn't create %s environment variable", username);
     }
@@ -58,7 +67,7 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
     int pipe_in[2], pipe_out[2];
     if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
         log(ERROR, "socket_forwarding_cmd: Cannot create pipe");
-        return CMD_STATUS_ERROR
+        return CMD_STATUS_ERROR;
     }
 
     pid_t pid = fork();

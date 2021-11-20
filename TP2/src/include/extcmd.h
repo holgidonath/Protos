@@ -2,7 +2,8 @@
 #define PROTOS_EXTCMD_H
 
 #include "buffer.h"
-#include "stdbool.h"
+#include <stdbool.h>
+#include "selector.h"
 
 #define READ 0
 #define WRITE 1

@@ -10,13 +10,6 @@ struct users {
     char *pass;
 };
 
-struct doh {
-    char           *host;
-    char           *ip;
-    unsigned short  port;
-    char           *path;
-    char           *query;
-};
 
 /* Commandline arguments */
 struct opt {

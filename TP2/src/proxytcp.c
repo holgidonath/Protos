@@ -29,6 +29,7 @@
 #include "include/proxyadmin.h"
 //#include "include/socket_admin.h"
 #include "include/extcmd.h"
+#include "include/proxytcp.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
@@ -234,6 +235,10 @@ proxy_describe_states(void)
 {
    return client_statbl;
 };
+
+struct opt * get_opt(void){
+    return &opt;
+}
 
 void 
 set_origin_address(struct address_data * address_data, const char * adress) 
