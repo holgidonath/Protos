@@ -10,21 +10,21 @@
 
 
 void env_var_init(char *username) {
-//    char * env_pop3filter_version;
-//    char * env_pop3_server;
-//    char * env_pop3_username;
+    char env_pop3filter_version[30];
+    char env_pop3_server[150];
+    char env_pop3_username[30];
     struct opt * opt = get_opt();
-    sprintf(env_pop3filter_version, "POP3FILTER_VERSION=", VERSION);
+    sprintf(env_pop3filter_version, "POP3FILTER_VERSION=%s", VERSION);
     if(putenv(env_pop3filter_version)) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3filter_version);
     }
 
-    sprintf(env_pop3_server, "POP3_SERVER=", opt->origin_server);
+    sprintf(env_pop3_server, "POP3_SERVER=%s", opt->origin_server);
     if(putenv(env_pop3_server)) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
     }
 
-    sprintf(env_pop3_server, "POP3_USERNAME=", opt->origin_server);
+    sprintf(env_pop3_server, "POP3_USERNAME=%s", opt->origin_server);
     if(putenv(env_pop3_username)) {
         log(ERROR, "putenv() couldn't create %s environment variable", username);
     }
