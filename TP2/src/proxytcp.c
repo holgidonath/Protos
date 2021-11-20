@@ -51,6 +51,17 @@
 #define DONEUSER            33
 #define DONERETR            34
 #define FORWARD             35
+#define BEGIN_P             36
+#define P                   37
+#define PI                  38
+#define PIP                 39
+#define PIPE                40
+#define PIPEL               41
+#define PIPELI              42
+#define PIPELIN             43
+#define PIPELINI            44
+#define PIPELININ           45
+#define PIPELINING          46
 
 
 struct opt opt;
@@ -58,6 +69,8 @@ struct opt opt;
 const char *appname;
 
 static metrics_t metrics;
+
+int should_parse;
 
 // typedef struct client
 // {
@@ -816,6 +829,16 @@ copy_r(struct selector_key *key)
 
     metrics->bytes_transfered += n;
 
+    if(ptr[0] == '+'){
+        log(INFO, "Response from server:\n%s", ptr);
+        if (should_parse)
+        {
+            log(INFO, "it was a capa response\n");
+            check_if_pipe_present(ptr);
+            should_parse = 0;
+        }
+    }
+
     if(key->fd == ATTACHMENT(key)->client_fd){
         if(ptr[0] == 'R'){
             log(INFO,"possible retr found");
@@ -998,6 +1021,7 @@ void parse_command(char * ptr){
            break;
            case CAPA:
            log(INFO, "CAPA requested");
+           should_parse = 1;
            state = FORWARD;
            break;
            case DONERETR:
@@ -1011,6 +1035,113 @@ void parse_command(char * ptr){
         }
         i++;
         c = toupper(ptr[i]);
+    }
+}
+
+void check_if_pipe_present(char * ptr){
+    int i = 0;
+    int parsing_possible_pipe = 0;
+    int state = BEGIN_P;
+    while (ptr[i] != '.')
+    {
+        if(ptr[i] != 'P' && !parsing_possible_pipe){
+            while (ptr[i] != '\n')
+            {
+                i++;
+            } 
+        }else{
+            parsing_possible_pipe = 1;
+            switch (state){
+                case BEGIN_P:
+                if(ptr[i] == 'P'){
+                    state=P;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case P:
+                if(ptr[i] == 'I'){
+                    state=PI;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PI:
+                if(ptr[i] == 'P'){
+                    state=PIP;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIP:
+                if(ptr[i] == 'E'){
+                    state=PIPE;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPE:
+                if(ptr[i] == 'L'){
+                    state=PIPEL;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPEL:
+                if(ptr[i] == 'I'){
+                    state=PIPELI;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPELI:
+                if(ptr[i] == 'N'){
+                    state=PIPELIN;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPELIN:
+                if(ptr[i] == 'I'){
+                    state=PIPELINI;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPELINI:
+                if(ptr[i] == 'N'){
+                    state=PIPELININ;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPELININ:
+                if(ptr[i] == 'G'){
+                    state=PIPELINING;
+                }else{
+                    parsing_possible_pipe = 0;
+                    state = BEGIN_P;
+                }
+                break;
+                case PIPELINING:
+                log(INFO, "srv supports pipelining");
+                parsing_possible_pipe = 0;
+                break;
+            }
+        }
+        i++;  
+    }
+    if(state != PIPELINING){
+        log(INFO, "srv does not support pipelining");
     }
 }
 
@@ -1031,9 +1162,11 @@ char * parse_user(char * ptr){
     char * buff[1024];
     while (ptr[i] != '\n') {
         buff[idx] = ptr[i];
+        log(INFO, "%c", buff[idx]);
         i++;
         idx++;
     }
+    log(INFO,"%s",buff);
     return buff;
 }
 
@@ -1135,6 +1268,7 @@ main(const int argc, char **argv) {
 
     metrics = init_metrics();
 
+    should_parse = 0;
     int proxy_fd = create_proxy_socket(addr, opt);
     int admin_fd = create_management_socket(mngmt_addr, opt);
 
