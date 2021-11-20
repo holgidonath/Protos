@@ -8,6 +8,8 @@
 #define READ 0
 #define WRITE 1
 
+void env_var_init(char *username);
+
 enum extern_cmd_status {
     CMD_STATUS_OK,
     CMD_STATUS_ERROR,
@@ -36,22 +38,5 @@ struct extern_cmd {
     bool              error_read;
 };
 
-static void cmd_write(struct selector_key *key);
-static void cmd_read(struct selector_key *key);
-static void cmd_close(struct selector_key *key);
-
-
-/* External command handlers */
-static const struct fd_handler cmd_handler = {
-        .handle_read   = cmd_read,
-        .handle_write  = cmd_write,
-        .handle_close  = cmd_close,
-        .handle_block  = NULL,
-};
-
-static enum extern_cmd_status
-socket_forwarding_cmd(struct selector_key *key, char * cmd);
-
-void env_var_init(char *username);
 
 #endif //PROTOS_EXTCMD_H

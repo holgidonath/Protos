@@ -53,52 +53,12 @@
 #define FORWARD             35
 
 
-typedef enum address_type {
-    ADDR_IPV4   = 0x01,
-    ADDR_IPV6   = 0x02,
-    ADDR_DOMAIN = 0x03,
-} address_type;
-
-typedef union address {
-    char                    fqdn[0xFF];
-    struct sockaddr_storage addr_storage;
-} address;
-
-typedef struct address_data {
-   
-    in_port_t origin_port;
-    address origin_addr;
-    address_type origin_type;
-    socklen_t origin_addr_len;
-    int origin_domain;
-
-
-} address_data;
-
 struct opt opt;
+
 const char *appname;
 
-enum proxy_states
-{
-    RESOLVE_ORIGIN,
-    CONNECT, 
-    GREETING,
-    EXTERN_CMD,
-    COPY,
-    DONE,
-    PERROR
-};
-
-struct copy
-{
-    int *fd;
-    buffer *rb, *wb;
-    fd_interest duplex;
-    struct copy *other;
- 
-};
-
 static metrics_t metrics;
+
 // typedef struct client
 // {
 
@@ -124,36 +84,13 @@ static metrics_t metrics;
 
 // } origin;
 
-struct connection 
-{
-    int client_fd;
-    struct copy copy_client;
-    int origin_fd;
-    struct address_data origin_data;
-    struct addrinfo *origin_resolution;
-    struct addrinfo *origin_resolution_current;
-    struct copy copy_origin;
-    buffer read_buffer, write_buffer;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
-    struct state_machine stm;
-    struct connection * next;
-    struct sockaddr_storage       client_addr;
-    socklen_t                     client_addr_len;
-    unsigned                references;
-    bool                    was_greeted;
-
-    struct extern_cmd       extern_cmd;
-    uint8_t                 raw_extern_read_buffer[2048];
-    buffer                  extern_read_buffer;
-    int                     extern_read_fd;
-    int                     extern_write_fd;
-};
-
 static struct connection * connections = NULL;
 
+/* ==================================================== */
+/*                STATIC PROTOTYPES                     */
+/* ==================================================== */
 static unsigned
 origin_connect(struct selector_key * key);
-
 
 static void
 copy_init(const unsigned state, struct selector_key *key);
@@ -185,8 +122,6 @@ extern_cmd_read(struct selector_key *key);
 static unsigned
 extern_cmd_write(struct selector_key *key);
 
-static enum extern_cmd_status
-socket_forwarding_cmd(struct selector_key *key, char * cmd);
 
 void parse_command(char * command);
 void parse_response(char * command);
