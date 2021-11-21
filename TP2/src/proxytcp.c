@@ -52,7 +52,7 @@
 #define CAPA                32
 #define DONEUSER            33
 #define DONERETR            34
-#define FORWARD             35
+#define GOTORN              35
 #define BEGIN_P             36
 #define P                   37
 #define PI                  38
@@ -64,6 +64,12 @@
 #define PIPELINI            44
 #define PIPELININ           45
 #define PIPELINING          46
+#define PA                  47
+#define PAS                 48
+#define PASS                49
+#define CONTRABARRAR        50
+#define NEWLINE             51
+#define DONEPARSING         52
 
 
 struct opt opt;
@@ -73,6 +79,7 @@ const char *appname;
 static metrics_t metrics;
 
 int should_parse;
+int should_parse_retr;
 
 char * get_stats(void)
 {
@@ -809,6 +816,10 @@ copy_r(struct selector_key *key)
             check_if_pipe_present(ptr);
             should_parse = 0;
         }
+        if(should_parse_retr){
+            log(INFO, "it was a retr response\n");
+            should_parse_retr = 0;
+        }
     }
 
     if(key->fd == ATTACHMENT(key)->client_fd){
@@ -911,9 +922,9 @@ copy_w(struct selector_key *key)
 int parse_command(char * ptr){
     int i = 0;
     int state = BEGIN;
-    int rsp = FORWARD;
+    int rsp = 0;
     char c = toupper(ptr[0]);
-    while(state != FORWARD){
+    while(state != DONEPARSING){
        switch(state){
            case BEGIN:
            if(c == 'R'){
@@ -922,100 +933,146 @@ int parse_command(char * ptr){
                state = U;
            }else if(c == 'C'){
                state = C;
+           }else if(c == 'P'){
+               state = P;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case R:
            if(c == 'E'){
                state = RE;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RE:
            if(c == 'T'){
                state = RET;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RET:
            if(c == 'R'){
                state = RETR;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RETR:
-           if(c == ' '){
-                state = DONERETR;
-           } else {
-               state = FORWARD;
-           }
+           should_parse_retr = 1;
+           state = GOTORN;
            break;
            case U:
            if(c == 'S'){
                state = US;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case US:
            if(c == 'E'){
                state = USE;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case USE:
            if(c == 'R'){
                state = USER;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case USER:
            if(c == ' '){
                state = DONEUSER;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
+           break;
+           case P:
+           if(c == 'A'){
+               state = PA;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PA:
+           if(c == 'S'){
+               state = PAS;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PAS:
+           if(c == 'S'){
+               state = PASS;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PASS:
+           state = GOTORN;
            break;
            case C:
            if(c == 'A'){
                state = CA;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CA:
            if(c == 'P'){
                state = CAP;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CAP:
            if(c == 'A'){
                state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CAPA:
-           log(INFO, "CAPA requested");
-           should_parse = 1;
-           state = FORWARD;
+           if(c == '\r'){
+               //log(INFO, "new line found");
+               state = CONTRABARRAR;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case CONTRABARRAR:
+           if(c == '\n'){
+               //log(INFO, "new line found");
+               state = NEWLINE;
+           }else{
+               state=GOTORN;
+           }
+           break;
+           case NEWLINE:
+           //hacer lo del interest y demas
+           log(INFO, "new line found");
+           state = DONEPARSING;
            break;
            case DONERETR:
            log(INFO, "RETR was found");
-           state = FORWARD;
            rsp = DONERETR;
+           state = GOTORN;
            break;
            case DONEUSER:
-           log(INFO, "user tried to login");
-           state = FORWARD;
+           //hay que ir copiando aca
+           state = GOTORN;
+           break;
+           case GOTORN:
+           while(c != '\r'){
+               i++;
+               c = toupper(ptr[i]);
+           }
+           state = CONTRABARRAR;
            break;
         }
         i++;
@@ -1328,6 +1385,7 @@ main(const int argc, char **argv) {
     metrics = init_metrics();
 
     should_parse = 0;
+    should_parse_retr = 0;
     int proxy_fd = create_proxy_socket(addr, opt);
     int admin_fd = create_management_socket(mngmt_addr, opt);
 
