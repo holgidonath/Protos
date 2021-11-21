@@ -29,12 +29,12 @@
 #include "include/util.h"
 #include "include/metrics.h"
 #include "include/proxyadmin.h"
-//#include "include/socket_admin.h"
 #include "include/extcmd.h"
 #include "include/proxytcp.h"
 
 #define N(x)                (sizeof(x)/sizeof((x)[0]))
 #define ATTACHMENT(key)     ( ( struct connection * )(key)->data)
+
 #define READ                0
 #define WRITE               1
 #define BEGIN               20
@@ -80,30 +80,6 @@ char * get_stats(void)
     sprintf(to_ret, "Total Connections: %d\nConcurrent Connections: %d\nTotal Bytes Transferred: %d\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
-// typedef struct client
-// {
-
-//     int client_fd;
-//     struct copy copy_client;
-
-
-// } client;
-
-// typedef struct origin 
-// {
-//     int origin_fd;
-//     uint16_t origin_port;
-//     address origin_addr;
-//     address_type origin_type;
-//     int origin_domain;
-//     socklen_t origin_addr_len;
-//     struct addrinfo *origin_resolution;
-//     struct addrinfo *origin_resolution_current;
-//     struct copy copy;
-
-
-
-// } origin;
 
 static struct connection * connections = NULL;
 
@@ -243,7 +219,6 @@ set_origin_address(struct address_data * address_data, const char * adress)
 }
 
 //---------------------------------------------------------------------------------------
-
 
 
 //       HANDLERS QUE EMITEN LOS EVENTOS DE LA MAQUINA DE ESTADOS
@@ -812,7 +787,6 @@ static unsigned
 copy_r(struct selector_key *key)
 {
     struct copy *d = copy_ptr(key);
-    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
