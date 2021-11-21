@@ -19,6 +19,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <ctype.h> // toupper
+#include <linux/sctp.h>
 
 #include "include/buffer.h"
 #include "include/args.h"
@@ -647,7 +648,14 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     fprintf(stdout, "Listening on SCTP port %d\n", opt.mgmt_port);
 
     // man 7 ip. no importa reportar nada si falla.
-    setsockopt(admin, IPPROTO_SCTP, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+
+    struct sctp_initmsg initmsg;
+    memset (&initmsg, 0, sizeof (initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    setsockopt(admin, IPPROTO_SCTP,SCTP_INITMSG, &initmsg, sizeof(initmsg));
 
     if(bind(admin, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
         perror("unable to bind management socket");

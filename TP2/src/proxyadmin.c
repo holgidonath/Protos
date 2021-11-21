@@ -40,6 +40,10 @@ typedef enum command_parser_states
     LOG,
     LOGI,
     LOGIN,
+    H,
+    HE,
+    HEL,
+    HELP,
     S,
     ST,
     STA,
@@ -198,19 +202,22 @@ admin_destroy(struct admin * admin){
         // if(con->origin_resolution_current != NULL){
         //     free(con->origin_resolution_current);
         // }
-        if(admin->references == 1){
+        if(admin->references == 1)
+
             free(admin);
         } else {
             admin->references -= 1;
         }
 
     }
-}
+
 
 static void
 admin_close(struct selector_key *key) {
 
+
     admin_destroy(ATTACHMENT(key));
+
 
 }
 
@@ -344,7 +351,7 @@ static unsigned pass_auth(struct selector_key* key, bool number){
     }
     else
     {
-        char *auth_error = "Login Successful\nWelcome\n";
+        char *auth_error = "Login Successful\nWelcome!\nYou can issue the HELP command to see all available commands\n";
         auth_error_size = strlen(auth_error);
         uint8_t *ptr = buffer_write_ptr(buff, &buff_size);
         memcpy(ptr, auth_error, auth_error_size);
@@ -370,12 +377,6 @@ static unsigned greet(struct selector_key* key)
 
 }
 
-//static void
-//hop(const unsigned state, struct selector_key* key)
-//{
-//    log(INFO, "successful hopping");
-//}
-
 static unsigned
 authenticate(struct selector_key * key)
 {
@@ -387,7 +388,6 @@ authenticate(struct selector_key * key)
     uint8_t * ptr = buffer_read_ptr(buff,&size);
     if(strncmp(login_key, ptr, strlen(login_key)) == 0)
     {
-        log(INFO, "Correct key");
         pass_auth(key,1);
         buffer_read_adv(buff,bytes);
         ATTACHMENT(key)->state = COMMANDS;
@@ -395,7 +395,6 @@ authenticate(struct selector_key * key)
     }
     else
     {
-        log(ERROR,"Incorrect key");
         pass_auth(key,0);
         buffer_read_adv(buff,bytes);
         return AUTH;
@@ -441,8 +440,8 @@ static unsigned recieve_from_client(struct selector_key * key)
     n = sctp_recvmsg(key->fd, ptr, size, NULL, 0, 0, 0);
     if(n<= 0)
     {
-        log(ERROR, "Admin Connection Terminated");
-//        shutdown(admin->client_fd,SHUT_WR);
+     log(ERROR, "RECV ERROR");
+
     }
     buffer_write_adv(buff, n);
     return n;
@@ -460,7 +459,7 @@ static unsigned parse_command(struct selector_key * key) {
     char c = toupper(*ptr);
     command_parser_states state = BEGIN;
     command_parser_states command;
-    char args[50];
+    char args[50] = {0};
     int args_index = 0;
     int i = 0;
     while (state != INVALID && buffer_can_read(buff)) {
@@ -472,7 +471,10 @@ static unsigned parse_command(struct selector_key * key) {
                     state = S;
                 } else if (c == 'G') {
                     state = G;
-                } else {
+                } else if (c == 'H'){
+                    state = H;
+                }
+                else {
                     state = INVALID;
                 }
                 break;
@@ -655,6 +657,35 @@ static unsigned parse_command(struct selector_key * key) {
                     state = INVALID;
                 }
                 break;
+            case H:
+                if(c == 'E'){
+                    state = HE;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case HE:
+                if(c == 'L'){
+                    state = HEL;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case HEL:
+                if(c == 'P'){
+                    state = HELP;
+                } else {
+                    state = INVALID;
+                }
+                break;
+            case HELP:
+                if(c == '\n'){
+                    state = CDONE;
+                    command = HELP;
+                } else {
+                    state = INVALID;
+                }
+                break;
             case ARGUMENTS:
                 if (c != '\n') {
                     args[args_index++] = ptr[i];
@@ -673,6 +704,7 @@ static unsigned parse_command(struct selector_key * key) {
     buff = &admin->write_buffer;
     ptr = buffer_write_ptr(buff, &size);
     char *message;
+    struct opt * opt;
     selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
 
     if (state == INVALID)
@@ -696,14 +728,47 @@ static unsigned parse_command(struct selector_key * key) {
 
         case STATS:
 
-
             message = get_stats();
+            memcpy(ptr, message, strlen(message));
+            buffer_write_adv(buff, strlen(message));
+            admin->state = COMMANDS;
+            free(message);
+            break;
+
+        case GETCMD:
+
+            opt = get_opt();
+            if(opt->cmd != NULL){
+                message = opt->cmd;
+                strcat(message, "\n");
+            } else {
+                message = "No command was set\n";
+            }
             memcpy(ptr, message, strlen(message));
             buffer_write_adv(buff, strlen(message));
             admin->state = COMMANDS;
             break;
 
+        case SETCMD:
+            opt = get_opt();
+            strcpy(opt->cmd, args);
+            message = "Filter command set!\n";
+            memcpy(ptr, message, strlen(message));
+            buffer_write_adv(buff, strlen(message));
+            admin->state = COMMANDS;
+            log(INFO, "Command changed to %s", opt->cmd);
+            break;
 
+        case HELP:
+            message = "STATS\t\tPrints useful statistics about the proxy server\n"
+                      "GETCMD\t\tPrints the current filter command\n"
+                      "SETCMD <cmd>\tSets new filter command\n"
+                      "LOGOUT\t\tDisconnects admin client\n"
+                      "HELP\t\tPrints this message\n";
+            memcpy(ptr, message, strlen(message));
+            buffer_write_adv(buff, strlen(message));
+            admin->state = COMMANDS;
+            break;
 
     }
 
