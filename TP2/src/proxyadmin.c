@@ -365,13 +365,12 @@ static unsigned pass_auth(struct selector_key* key, bool number){
 static unsigned greet(struct selector_key* key)
 {
     int status = greeting(key);
-    selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
     if (status < 0)
     {
         ATTACHMENT(key)->state = AERROR;
         return AERROR;
     }
-
+    selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
     ATTACHMENT(key)->state = AUTH;
     return AUTH;
 
@@ -381,21 +380,34 @@ static unsigned
 authenticate(struct selector_key * key)
 {
     size_t size;
+    int status;
     buffer * buff = &ATTACHMENT(key)->read_buffer;
     char * login_key = "password";
     int bytes = recieve_from_client(key);
+    if(bytes < 0)
+    {
+        return AERROR;
+    }
     selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
     uint8_t * ptr = buffer_read_ptr(buff,&size);
     if(strncmp(login_key, ptr, strlen(login_key)) == 0)
     {
-        pass_auth(key,1);
+        status = pass_auth(key,1);
+        if (status < 0)
+        {
+            return AERROR;
+        }
         buffer_read_adv(buff,bytes);
         ATTACHMENT(key)->state = COMMANDS;
         return COMMANDS;
     }
     else
     {
-        pass_auth(key,0);
+        status = pass_auth(key,0);
+        if (status < 0)
+        {
+            return AERROR;
+        }
         buffer_read_adv(buff,bytes);
         return AUTH;
     }
@@ -406,9 +418,13 @@ authenticate(struct selector_key * key)
 
 static unsigned command_response(struct selector_key * key)
 {
-
+    int status;
     admin * admin = ATTACHMENT(key);
-    send_to_client(key);
+    status = send_to_client(key);
+    if(status < 0)
+    {
+        return AERROR;
+    }
     selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
     return admin->state;
 }
@@ -440,8 +456,7 @@ static unsigned recieve_from_client(struct selector_key * key)
     n = sctp_recvmsg(key->fd, ptr, size, NULL, 0, 0, 0);
     if(n<= 0)
     {
-     log(ERROR, "RECV ERROR");
-
+     return -1;
     }
     buffer_write_adv(buff, n);
     return n;
@@ -452,9 +467,11 @@ static unsigned parse_command(struct selector_key * key) {
     admin *admin = ATTACHMENT(key);
     buffer *buff = &admin->read_buffer;
     int bytes = recieve_from_client(key);
+    if (bytes < 0)
+    {
+        return AERROR;
+    }
     size_t size;
-
-
     uint8_t *ptr = buffer_read_ptr(buff, &size);
     char c = toupper(*ptr);
     command_parser_states state = BEGIN;
