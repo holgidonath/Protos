@@ -55,6 +55,8 @@ typedef enum command_parser_states
 } command_parser_states;
 
 static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
+    memset(out_buffer, 0, BUFF_SIZE);
+    memset(in_buff, 0, BUFF_SIZE);
     fgets(out_buffer, BUFF_SIZE, stdin);
     strtok(out_buffer, "\n");
     if (strlen(out_buffer) < 0)
@@ -98,25 +100,8 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                 }
                 break;
             case LOG:
-                if (c == 'I') {
-                    state = LOGI;
-                } else if (c == 'O') {
+                if (c == 'O') {
                     state = LOGO;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGI:
-                if (c == 'N') {
-                    state = LOGIN;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGIN:
-                if (c == ' ') {
-                    state = ARGUMENTS;
-                    command = LOGIN;
                 } else {
                     state = INVALID;
                 }
@@ -312,6 +297,7 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
         return -1;
     } else {
         memset(out_buffer, 0, BUFF_SIZE);
+        memset(in_buff, 0, BUFF_SIZE);
         out_buffer[0] = command;
         strcat(out_buffer, args);
         n = sctp_sendmsg(sock, out_buffer, strlen(out_buffer), NULL, 0,0,0,0,0,0);
@@ -319,6 +305,12 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
             printf("Error sending command!\n");
             return -1;
         }
+        n = sctp_recvmsg(sock,in_buff, BUFF_SIZE, NULL, 0,0,0);
+        if(n < 0){
+            printf("Error receiving response!\n");
+            return -1;
+        }
+        printf(in_buff);
     }
 
     return 1;
@@ -392,6 +384,9 @@ int main(const int argc, char **argv) {
         printf("Please enter Password to enter. You may type 'QUIT to exit Password: \n");
         status = get_authentication(sock,incoming, out);
 
+    }
+    while(1){
+        parse_command(sock, incoming, out);
     }
     return 0;
 }
