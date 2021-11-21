@@ -52,7 +52,7 @@
 #define CAPA                32
 #define DONEUSER            33
 #define DONERETR            34
-#define FORWARD             35
+#define GOTORN              35
 #define BEGIN_P             36
 #define P                   37
 #define PI                  38
@@ -64,6 +64,12 @@
 #define PIPELINI            44
 #define PIPELININ           45
 #define PIPELINING          46
+#define PA                  47
+#define PAS                 48
+#define PASS                49
+#define CONTRABARRAR        50
+#define NEWLINE             51
+#define DONEPARSING         52
 
 
 struct opt opt;
@@ -73,11 +79,12 @@ const char *appname;
 static metrics_t metrics;
 
 int should_parse;
+int should_parse_retr;
 
 char * get_stats(void)
 {
     char * to_ret = malloc(100); //TODO: free este string
-    sprintf(to_ret, "+%d %d %d", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
+    sprintf(to_ret, "+Total connections: %lu\nConcurrent connections: %lu\nTotal bytes transferred: %lu\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
 
@@ -108,19 +115,18 @@ static void *
 resolve_blocking(void * data);
 
 static void
-extern_cmd_init(const unsigned state, struct selector_key *key);
+filter_init(const unsigned state, struct selector_key *key);
+
+static unsigned
+filter_send(struct selector_key *key);
+
+static unsigned
+filter_recv(struct selector_key *key);
 
 static void
-extern_cmd_close(const unsigned state, struct selector_key *key);
+socket_forwarding_cmd (struct selector_key * key, char *cmd);
 
-static unsigned
-extern_cmd_read(struct selector_key *key);
-
-static unsigned
-extern_cmd_write(struct selector_key *key);
-
-
-void parse_command(char * command);
+int parse_command(char * command);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
@@ -137,11 +143,10 @@ static const struct state_definition client_statbl[] =
 
     },
     {
-        .state            = EXTERN_CMD,
-        .on_arrival       = extern_cmd_init,
-        .on_read_ready    = extern_cmd_read,
-        .on_write_ready   = extern_cmd_write,
-        .on_departure     = extern_cmd_close,
+        .state            = FILTER,
+        .on_arrival       = filter_init,
+        .on_read_ready    = filter_recv,
+        .on_write_ready   = filter_send,
     },
     {
         .state = COPY,
@@ -368,6 +373,7 @@ new_connection(int client_fd)
 
         con->references = 1;
         con->was_greeted = false;
+        con->was_retr = false;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
@@ -789,6 +795,8 @@ copy_r(struct selector_key *key)
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
 
+    int command_state;
+
     size_t size;
     ssize_t n;
 
@@ -808,13 +816,20 @@ copy_r(struct selector_key *key)
             check_if_pipe_present(ptr, b);
             should_parse = 0;
         }
+        if(should_parse_retr){
+            log(INFO, "it was a retr response\n");
+            should_parse_retr = 0;
+        }
     }
 
     if(key->fd == ATTACHMENT(key)->client_fd){
         if(ptr[0] == 'R'){
             log(INFO,"possible retr found");
         }
-        parse_command(ptr);
+        command_state = parse_command(ptr);
+        if(command_state == DONERETR) {
+            ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
+        }
     } 
 
     // log(INFO,"message captured");
@@ -833,9 +848,16 @@ copy_r(struct selector_key *key)
     {
         metrics->bytes_transfered += n;
         buffer_write_adv(b,n);
+        if (ATTACHMENT(key)->was_retr && opt.cmd){
+            log(DEBUG, "Going for an external process...")
+
+        }
     }
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
+    if( ret != FILTER ) {
+        log(INFO, "Nothing to filter")
+        copy_compute_interests(key->s, d);
+        copy_compute_interests(key->s, d->other);
+    }
     if(d->duplex == OP_NOOP)
     {
         ret = DONE;
@@ -897,11 +919,12 @@ copy_w(struct selector_key *key)
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
-void parse_command(char * ptr){
+int parse_command(char * ptr){
     int i = 0;
     int state = BEGIN;
+    int rsp = 0;
     char c = toupper(ptr[0]);
-    while(state != FORWARD){
+    while(state != DONEPARSING){
        switch(state){
            case BEGIN:
            if(c == 'R'){
@@ -910,104 +933,152 @@ void parse_command(char * ptr){
                state = U;
            }else if(c == 'C'){
                state = C;
+           }else if(c == 'P'){
+               state = P;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case R:
            if(c == 'E'){
                state = RE;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RE:
            if(c == 'T'){
                state = RET;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RET:
            if(c == 'R'){
                state = RETR;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case RETR:
-           if(c == ' '){
-                state = DONERETR;
-           } else {
-               state = FORWARD;
-           }
+           should_parse_retr = 1;
+           state = GOTORN;
            break;
            case U:
            if(c == 'S'){
                state = US;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case US:
            if(c == 'E'){
                state = USE;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case USE:
            if(c == 'R'){
                state = USER;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case USER:
            if(c == ' '){
                state = DONEUSER;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
+           break;
+           case P:
+           if(c == 'A'){
+               state = PA;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PA:
+           if(c == 'S'){
+               state = PAS;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PAS:
+           if(c == 'S'){
+               state = PASS;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case PASS:
+           state = GOTORN;
            break;
            case C:
            if(c == 'A'){
                state = CA;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CA:
            if(c == 'P'){
                state = CAP;
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CAP:
            if(c == 'A'){
                state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
            }else{
-               state = FORWARD;
+               state = GOTORN;
            }
            break;
            case CAPA:
-           log(INFO, "CAPA requested");
-           should_parse = 1;
-           state = FORWARD;
+           if(c == '\r'){
+               //log(INFO, "new line found");
+               state = CONTRABARRAR;
+           }else{
+               state = GOTORN;
+           }
+           break;
+           case CONTRABARRAR:
+           if(c == '\n'){
+               //log(INFO, "new line found");
+               state = NEWLINE;
+           }else{
+               state=GOTORN;
+           }
+           break;
+           case NEWLINE:
+           //hacer lo del interest y demas
+           log(INFO, "new line found");
+           state = DONEPARSING;
            break;
            case DONERETR:
            log(INFO, "RETR was found");
-           state = FORWARD;
+           rsp = DONERETR;
+           state = GOTORN;
            break;
            case DONEUSER:
-           log(INFO, "user tried to login");
-           state = FORWARD;
+           //hay que ir copiando aca
+           state = GOTORN;
+           break;
+           case GOTORN:
+           while(c != '\r'){
+               i++;
+               c = toupper(ptr[i]);
+           }
+           state = CONTRABARRAR;
            break;
         }
         i++;
         c = toupper(ptr[i]);
     }
+    return rsp;
 }
 
 void check_if_pipe_present(char * ptr, buffer *b){
@@ -1161,67 +1232,140 @@ char * parse_user(char * ptr){
 //                                      EXTERN COMMAND
 //-----------------------------------------------------------------------------------------------------------------
 static void
-extern_cmd_init(const unsigned state, struct selector_key *key) {
-    struct extern_cmd * extern_cmd = &ATTACHMENT(key)->extern_cmd;
+filter_init(const unsigned state, struct selector_key *key) {
+    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
 
-    extern_cmd->done_read    = false;
-    extern_cmd->done_write   = false;
-    extern_cmd->error_write  = false;
-    extern_cmd->error_read   = false;
+    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
+    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
+}
 
-    extern_cmd->send_bytes_write    = 0;
-    extern_cmd->send_bytes_read     = 0;
+static unsigned
+filter_send(struct selector_key *key) {
+    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+    enum proxy_states ret;
 
-    extern_cmd->read_buffer  = &ATTACHMENT(key)->write_buffer;
-    extern_cmd->write_buffer = &ATTACHMENT(key)->extern_read_buffer;
-    extern_cmd->cmd_rb       = &ATTACHMENT(key)->extern_read_buffer;
-    extern_cmd->cmd_wb       = &ATTACHMENT(key)->write_buffer;
+    size_t   count;
+    ssize_t  n;
+    buffer  *b = d->mail_buffer;
+    uint8_t *ptr;
 
-    extern_cmd->origin_fd    = &ATTACHMENT(key)->origin_fd;
-    extern_cmd->client_fd    = &ATTACHMENT(key)->client_fd;
-    extern_cmd->read_fd  = &ATTACHMENT(key)->extern_read_fd;
-    extern_cmd->write_fd = &ATTACHMENT(key)->extern_write_fd;
+    ptr = buffer_read_ptr(b, &count);
+    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], ptr, count);
+    if (n == 0) {
+        selector_status ss = SELECTOR_SUCCESS;
+        ss |= selector_set_interest_key(key, OP_NOOP);
+        ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+        ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
 
-    char *          ptr;
-    size_t          count;
-    buffer  *       buff  = extern_cmd->write_buffer;
-    const char err_msg[] = "extern_cmd_init(), extern command error";
-    ptr = (char*) buffer_write_ptr(buff, &count);
+    } if(n == -1) {
+        log(ERROR, "filter_send: writing to file descriptor failed")
+        ret = ERROR;
 
-    extern_cmd->status = socket_forwarding_cmd(key, opt.cmd);
-
-    if (extern_cmd->status == CMD_STATUS_ERROR) {
-        log(ERROR, err_msg)
-        buffer_write_adv(buff, strlen(err_msg));
-        selector_set_interest(key->s, *extern_cmd->client_fd, OP_WRITE);
+    } else {
+        selector_status ss = SELECTOR_SUCCESS;
+        if (ATTACHMENT(key)->read_all_mail){
+            close(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
+            selector_unregister_fd(key->s, ATTACHMENT(key)->w_to_filter_fds[WRITE]);
+            buffer_reset(b);
+            ss |= selector_set_interest(key->s, ATTACHMENT(key)->r_from_filter_fds[READ], OP_READ);
+            ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+        } else {
+            buffer_reset(b);
+            ss |= selector_set_interest_key(key, OP_NOOP);
+            ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+            ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
+        }
     }
 
-    buff = extern_cmd->read_buffer;
-
-    // TODO parsing del mail aca ?
+    return ret;
 }
 
+static unsigned
+filter_recv(struct selector_key *key) {
+    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+    enum proxy_states ret = FILTER;
+    size_t  count;
+    ssize_t  n;
+    uint8_t *ptr;
+
+    buffer  *b = d->filtered_mail_buffer;
+    buffer_reset(b);
+    ptr = buffer_write_ptr(b, &count);
+    n = read(ATTACHMENT(key)->r_from_filter_fds[READ], ptr, count);
+    if(n > 0) {
+        buffer_write_adv(b, n);
+        ATTACHMENT(key)->read_all_mail = *(b->write-1) == '\n' &&
+                                                    *(b->write-2) == '\r' &&
+                                                    *(b->write-3) == '.'  &&
+                                                    *(b->write-4) == '\n' &&
+                                                    *(b->write-5) == '\r';
+        if (ATTACHMENT(key)->read_all_mail){
+            close(ATTACHMENT(key)->r_from_filter_fds[READ]);
+            selector_unregister_fd(key->s, ATTACHMENT(key)->r_from_filter_fds[READ]);
+        }
+        ATTACHMENT(key)->has_filtered_mail = true;
+        selector_status ss = SELECTOR_SUCCESS;
+        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+        ret = ss == SELECTOR_SUCCESS ? COPY : PERROR;
+    }
+    else if (n == 0) {
+        selector_status ss = SELECTOR_SUCCESS;
+        ss |= selector_set_interest_key(key, OP_NOOP);
+        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+        ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+    }
+    else {
+        log(ERROR, "filter_recv: reading from file descriptor failed")
+        ret = ERROR;
+    }
+
+    return ret;
+}
+
+/* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
 static void
-extern_cmd_close(const unsigned state, struct selector_key * key) {
-    struct extern_cmd * extern_cmd  = &ATTACHMENT(key)->extern_cmd;
+socket_forwarding_cmd (struct selector_key * key, char *cmd) {
+    int n;
+    // pipe_in (w_to_filter_fds ): father --> child
+    // pipe_out (r_from_filter_fds): child  --> father
+    int *pipe_in = ATTACHMENT(key)->w_to_filter_fds;
+    int *pipe_out = ATTACHMENT(key)->r_from_filter_fds;
 
-    selector_unregister_fd(key->s, *extern_cmd->read_fd);
-    close(*extern_cmd->read_fd);
+    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
+        log(FATAL, "socket_forwarding_cmd: Cannot create pipe");
+        exit(EXIT_FAILURE);
+    }
 
-    selector_unregister_fd(key->s, *extern_cmd->write_fd);
-    close(*extern_cmd->write_fd);
-}
+    pid_t pid = fork();
+    if( pid == 0 ) {
+        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> pipe_in[READ]
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
+        close(pipe_in[WRITE]);
+        close(pipe_out[READ]);
+        log(INFO, "socket_forwarding_cmd: executing command");
+        n = system(cmd);
+        log(DEBUG, "socket_forwarding_cmd: BACK from executing command");
+        _exit(n);
+    } else {
+        close(pipe_in[READ]);
+        close(pipe_out[WRITE]);
 
-static unsigned
-extern_cmd_read(struct selector_key *key) {
-   // TODO read
-    return 0;
-}
+        selector_status ss = SELECTOR_SUCCESS;
+        ss |= selector_register(key->s,
+                                pipe_in[WRITE],
+                                &proxy_handler,
+                                OP_WRITE,
+                                key->data);
 
-static unsigned
-extern_cmd_write(struct selector_key * key) {
-    // TODO write
-    return 0;
+        ss |= selector_register(key->s,
+                                pipe_out[READ],
+                                &proxy_handler,
+                                OP_READ,
+                                key->data);
+
+        selector_fd_set_nio(pipe_in[WRITE]);
+        selector_fd_set_nio(pipe_out[READ]);
+    }
 }
 
 //-----------------------------------------------------------------------------------------------------------------
@@ -1255,6 +1399,7 @@ main(const int argc, char **argv) {
     metrics = init_metrics();
 
     should_parse = 0;
+    should_parse_retr = 0;
     int proxy_fd = create_proxy_socket(addr, opt);
     int admin_fd = create_management_socket(mngmt_addr, opt);
 

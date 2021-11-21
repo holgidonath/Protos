@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <netinet/in.h>
+#include <string.h>
 #include "stm.h"
 #include "proxyadmin.h"
 #include "extcmd.h"
@@ -27,7 +28,7 @@ enum proxy_states
 {
     RESOLVE_ORIGIN = 0,
     CONNECT,
-    EXTERN_CMD,
+    FILTER,
     COPY,
     DONE,
     PERROR,
@@ -87,11 +88,15 @@ struct connection
     unsigned                references;
     bool                    was_greeted;
 
-    struct extern_cmd       extern_cmd;
-    uint8_t                 raw_extern_read_buffer[2048];
-    buffer                  extern_read_buffer;
-    int                     extern_read_fd;
-    int                     extern_write_fd;
+    /* External Process */
+    union {
+        struct extern_cmd    extern_cmd;
+    } extern_cmd;
+    int                     w_to_filter_fds[2];
+    int                     r_from_filter_fds[2];
+    bool                    was_retr;
+    bool                    read_all_mail;
+    bool                    has_filtered_mail;
 };
 
 

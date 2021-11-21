@@ -5,8 +5,12 @@
 #include <errno.h>
 #include <getopt.h>
 #include <assert.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include "include/argsctl.h"
 #include "include/logger.h"
+
 
 void
 admin_usage(){
@@ -59,7 +63,7 @@ parse_admin_options(int argc, char **argv, struct admin_opt * opt) {
     assert(argv && opt);
     memset(opt, 0, sizeof(*opt));
     opt->mgmt_port    = 9090;     /* TODO:default value */
-    opt->mgmt_addr    = NULL;
+    opt->mgmt_addr    = "127.0.0.1";
 
     /* Parse command line arguments */
     int c;
@@ -77,7 +81,7 @@ parse_admin_options(int argc, char **argv, struct admin_opt * opt) {
                 break;
             case '?':
                 admin_usage();
-                log(FATAL, "Invalid arguments");
+                printf("Invalid Arguments");
 
 
         }
@@ -90,7 +94,7 @@ parse_admin_options(int argc, char **argv, struct admin_opt * opt) {
 }
 
 void
-set_mgmt_address(struct address_data * address_data, const char * adress)
+set_mgmt_address(struct address_data * address_data, const char * adress, struct admin_opt * opt)
 {
     memset(&(address_data->mgmt_addr), 0, sizeof(address_data->mgmt_addr));
 
@@ -117,11 +121,11 @@ set_mgmt_address(struct address_data * address_data, const char * adress)
 
         ipv6.sin6_family = AF_INET6;
 
-        ipv6.sin6_port = htons(opt.mgmt_port);
-        memcpy(&address_data->mgmt_addres, &ipv6, address_data->mgmt_addr_len);
+        ipv6.sin6_port = htons(opt->mgmt_port);
+        memcpy(&address_data->mgmt_addr, &ipv6, address_data->mgmt_addr_len);
         return;
     }
-    ipv4.sin_port = htons(opt.mgmt_port);
+    ipv4.sin_port = htons(opt->mgmt_port);
     memcpy(&address_data->mgmt_addr, &ipv4, address_data->mgmt_addr_len);
     return;
 }
