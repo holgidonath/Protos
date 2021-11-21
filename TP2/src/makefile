@@ -15,9 +15,9 @@ clean:
 	@rm -f *.0	$(ADMIN_CTL_NAME)
 
 proxy-server:
-	$(CC_C) $(CFLAGS) $(PROXY_SOURCES:=.c) $(LIBS:=.c) -o $(PROXY_NAME) $(SCTPFLAG) $(PTHREADFLAG)
+	$(CC_C) $(CFLAGS) $(PROXY_SOURCES:=.c) $(LIBS:=.c) $(SCTPFLAG) -o $(PROXY_NAME) $(PTHREADFLAG)
 
 admin-ctl:
-	$(CC_C) $(CFLAGS) $(ADMIN_CTL_SOURCES:=.c) -o $(ADMIN_CLIENT_NAME) $(SCTPFLAG)
+	$(CC_C) $(CFLAGS) $(ADMIN_CTL_SOURCES:=.c) $(SCTPFLAG) -o $(ADMIN_CTL_NAME)
 
 .PHONY: all
