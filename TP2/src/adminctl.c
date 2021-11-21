@@ -69,7 +69,6 @@ int main(const int argc, char **argv) {
     }
     int n = sctp_recvmsg(sock, incoming, BUFF_SIZE, NULL, 0,0,0);
     printf(incoming);
-    printf("\n");
     if(n < 0)
     {
         printf("Error getting greeting\n");
@@ -77,7 +76,7 @@ int main(const int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    while(status == 0);
+    while(!status)
     {
         printf("Please enter Password to enter. You may type 'QUIT to exit Password: \n");
         status = get_authentication(sock,incoming, out);

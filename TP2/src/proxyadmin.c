@@ -322,7 +322,7 @@ static unsigned greeting(struct selector_key* key){
     buffer * buff = &admin->write_buffer;
     size_t buff_size;
 
-    char * greeting = "+OK";
+    char * greeting = "+OK\n";
     greeting_size = strlen(greeting);
 
     uint8_t  * ptr = buffer_write_ptr(buff, &buff_size);
@@ -342,7 +342,7 @@ static unsigned pass_auth(struct selector_key* key, bool number){
     int n;
     if (number == 0)
     {
-        char *auth_error = "Incorrect Password!\nTry again: ";
+        char *auth_error = "-ERR\n";
         auth_error_size = strlen(auth_error);
         uint8_t *ptr = buffer_write_ptr(buff, &buff_size);
         memcpy(ptr, auth_error, auth_error_size);
@@ -351,7 +351,7 @@ static unsigned pass_auth(struct selector_key* key, bool number){
     }
     else
     {
-        char *auth_error = "Login Successful\nWelcome!\nYou can issue the HELP command to see all available commands\n";
+        char *auth_error = "+OK\n";
         auth_error_size = strlen(auth_error);
         uint8_t *ptr = buffer_write_ptr(buff, &buff_size);
         memcpy(ptr, auth_error, auth_error_size);
