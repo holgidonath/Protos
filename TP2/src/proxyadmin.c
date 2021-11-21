@@ -34,38 +34,11 @@
 
 typedef enum command_parser_states
 {
-    BEGIN,
-    L,
-    LO,
-    LOG,
-    LOGI,
-    LOGIN,
-    H,
-    HE,
-    HEL,
-    HELP,
-    S,
-    ST,
-    STA,
-    STAT,
-    STATS,
-    G,
-    GE,
-    GET,
-    GETC,
-    GETCM,
+
+    STATS = 0,
     GETCMD,
-    SE,
-    SET,
-    SETC,
-    SETCM,
     SETCMD,
-    LOGO,
-    LOGOU,
     LOGOUT,
-    ARGUMENTS,
-    INVALID,
-    CDONE,
 
 
 } command_parser_states;
@@ -322,7 +295,7 @@ static unsigned greeting(struct selector_key* key){
     buffer * buff = &admin->write_buffer;
     size_t buff_size;
 
-    char * greeting = "+OK\n";
+    char * greeting = "+Greetings\n";
     greeting_size = strlen(greeting);
 
     uint8_t  * ptr = buffer_write_ptr(buff, &buff_size);
@@ -464,6 +437,8 @@ static unsigned recieve_from_client(struct selector_key * key)
 }
 
 static unsigned parse_command(struct selector_key * key) {
+
+    char buf[2048] = {0};
     admin *admin = ATTACHMENT(key);
     buffer *buff = &admin->read_buffer;
     int bytes = recieve_from_client(key);
@@ -473,280 +448,30 @@ static unsigned parse_command(struct selector_key * key) {
     }
     size_t size;
     uint8_t *ptr = buffer_read_ptr(buff, &size);
-    char c = toupper(*ptr);
-    command_parser_states state = BEGIN;
-    command_parser_states command;
-    char args[50] = {0};
-    int args_index = 0;
-    int i = 0;
-    while (state != INVALID && buffer_can_read(buff)) {
-        switch (state) {
-            case BEGIN:
-                if (c == 'L') {
-                    state = L;
-                } else if (c == 'S') {
-                    state = S;
-                } else if (c == 'G') {
-                    state = G;
-                } else if (c == 'H'){
-                    state = H;
-                }
-                else {
-                    state = INVALID;
-                }
-                break;
-            case L:
-                if (c == 'O') {
-                    state = LO;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LO:
-                if (c == 'G') {
-                    state = LOG;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOG:
-                if (c == 'I') {
-                    state = LOGI;
-                } else if (c == 'O') {
-                    state = LOGO;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGI:
-                if (c == 'N') {
-                    state = LOGIN;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGIN:
-                if (c == ' ') {
-                    state = ARGUMENTS;
-                    command = LOGIN;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGO:
-                if (c == 'U') {
-                    state = LOGOU;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGOU:
-                if (c == 'T') {
-                    state = LOGOUT;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case LOGOUT:
-                if (c == '\n') //TODO: ver si tengo que hacer para \r\n tambien o solo \n
-                {
-                    state = CDONE;
-                    command = LOGOUT;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case S:
-                if (c == 'T') {
-                    state = ST;
-                } else if (c == 'E') {
-                    state = SE;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case SE:
-                if (c == 'T') {
-                    state = SET;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case SET:
-                if (c == 'C') {
-                    state = SETC;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case SETC:
-                if (c == 'M') {
-                    state = SETCM;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case SETCM:
-                if (c == 'D') {
-                    state = SETCMD;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case SETCMD:
-                if (c == ' ') {
-                    state = ARGUMENTS;
-                    command = SETCMD;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case ST:
-                if (c == 'A') {
-                    state = STA;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case STA:
-                if (c == 'T') {
-                    state = STAT;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case STAT:
-                if (c == 'S') {
-                    state = STATS;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case STATS:
-                if (c == '\n') {
-                    state = CDONE;
-                    command = STATS;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case G:
-                if (c == 'E') {
-                    state = GE;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case GE:
-                if (c == 'T') {
-                    state = GET;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case GET:
-                if (c == 'C') {
-                    state = GETC;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case GETC:
-                if (c == 'M') {
-                    state = GETCM;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case GETCM:
-                if (c == 'D') {
-                    state = GETCMD;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case GETCMD:
-                if (c == '\n')//TODO: ver lo de \r\n que puse arriba
-                {
-                    state = CDONE;
-                    command = GETCMD;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case H:
-                if(c == 'E'){
-                    state = HE;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case HE:
-                if(c == 'L'){
-                    state = HEL;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case HEL:
-                if(c == 'P'){
-                    state = HELP;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case HELP:
-                if(c == '\n'){
-                    state = CDONE;
-                    command = HELP;
-                } else {
-                    state = INVALID;
-                }
-                break;
-            case ARGUMENTS:
-                if (c != '\n') {
-                    args[args_index++] = ptr[i];
-                } else {
-                    state = CDONE;
-                }
-                break;
-
-            case CDONE:
-                break;
-        }
-        buffer_read_adv(buff, 1);
-        c = toupper(ptr[++i]);
-    }
-    buffer_read_adv(buff, bytes - i);
+    int comando = *ptr - '0';
+    buffer_read_adv(buff, 1);
     buff = &admin->write_buffer;
     ptr = buffer_write_ptr(buff, &size);
     char *message;
     struct opt * opt;
     selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+    int flag = 0;
 
-    if (state == INVALID)
+    switch (comando)
     {
-        message = "Invalid command\n";
-        memcpy(ptr, message, strlen(message));
-        buffer_write_adv(buff, strlen(message));
-        admin->state = COMMANDS;
-        return COMMANDS;
-    }
-
-    switch (command)
-    {
-        case LOGOUT:
-
-            message = "Loggin out...\n";
-            memcpy(ptr, message, strlen(message));
-            buffer_write_adv(buff, strlen(message));
-            admin->state = ADONE;
-            break;
 
         case STATS:
 
             message = get_stats();
-            memcpy(ptr, message, strlen(message));
+            if(message == NULL)
+            {
+                message = "-ERR\n";
+                memcpy(ptr, message, strlen(message));
+            }
+            else
+            {
+                memcpy(ptr, message, strlen(message));
+            }
             buffer_write_adv(buff, strlen(message));
             admin->state = COMMANDS;
             free(message);
@@ -755,36 +480,59 @@ static unsigned parse_command(struct selector_key * key) {
         case GETCMD:
 
             opt = get_opt();
-            if(opt->cmd != NULL){
-                message = opt->cmd;
+            if(opt->cmd != NULL)
+            {
+                message = malloc(2048);
+                memset(message,0, 2048);
+                message[0] = '+';
+                strcat(message, opt->cmd);
                 strcat(message, "\n");
+                flag = 1;
+
             } else {
-                message = "No command was set\n";
+                message = "-ERR\n";
             }
             memcpy(ptr, message, strlen(message));
             buffer_write_adv(buff, strlen(message));
+            if(flag){
+                free(message);
+            }
             admin->state = COMMANDS;
             break;
 
         case SETCMD:
+
             opt = get_opt();
-            strcpy(opt->cmd, args);
-            message = "Filter command set!\n";
+            if (opt == NULL)
+            {
+                message = "-ERR\n";
+            }
+            else {
+                buff = &admin->read_buffer;
+                ptr = buffer_read_ptr(buff,&size);
+                int j = 0;
+                while(buffer_can_read(buff)){
+                    buf[j] = ptr[j];
+                    j++;
+                    buffer_read_adv(buff, 1);
+                }
+                buff = &admin->write_buffer;
+                ptr = buffer_read_ptr(buff,&size);
+                strcpy(opt->cmd, buf);
+                message = "+OK\n";
+            }
             memcpy(ptr, message, strlen(message));
             buffer_write_adv(buff, strlen(message));
             admin->state = COMMANDS;
             log(INFO, "Command changed to %s", opt->cmd);
             break;
 
-        case HELP:
-            message = "STATS\t\tPrints useful statistics about the proxy server\n"
-                      "GETCMD\t\tPrints the current filter command\n"
-                      "SETCMD <cmd>\tSets new filter command\n"
-                      "LOGOUT\t\tDisconnects admin client\n"
-                      "HELP\t\tPrints this message\n";
+        case LOGOUT:
+
+            message = "+OK\n";
             memcpy(ptr, message, strlen(message));
             buffer_write_adv(buff, strlen(message));
-            admin->state = COMMANDS;
+            admin->state = ADONE;
             break;
 
     }

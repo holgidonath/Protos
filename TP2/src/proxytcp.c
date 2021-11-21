@@ -77,7 +77,7 @@ int should_parse;
 char * get_stats(void)
 {
     char * to_ret = malloc(100); //TODO: free este string
-    sprintf(to_ret, "+%d %d %d", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
+    sprintf(to_ret, "+Total connections: %lu\nConcurrent connections: %lu\nTotal bytes transferred: %lu\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
 
