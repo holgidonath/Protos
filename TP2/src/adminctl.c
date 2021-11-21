@@ -313,7 +313,7 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
     } else {
         memset(out_buffer, 0, BUFF_SIZE);
         out_buffer[0] = command;
-        strcat(command, args);
+        strcat(out_buffer, args);
         n = sctp_sendmsg(sock, out_buffer, strlen(out_buffer), NULL, 0,0,0,0,0,0);
         if(n < 0){
             printf("Error sending command!\n");
