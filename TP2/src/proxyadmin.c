@@ -518,6 +518,10 @@ static unsigned parse_command(struct selector_key * key) {
                 }
                 buff = &admin->write_buffer;
                 ptr = buffer_read_ptr(buff,&size);
+                if(opt->cmd == NULL)
+                {
+                    opt->cmd = malloc(sizeof(buf));
+                }
                 strcpy(opt->cmd, buf);
                 message = "+OK\n";
             }
