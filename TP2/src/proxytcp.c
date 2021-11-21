@@ -782,7 +782,7 @@ copy_ptr(struct selector_key * key)
     }
     return d;
 }
-void check_if_pipe_present(char * ptr);
+void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
 copy_r(struct selector_key *key)
 {
@@ -805,7 +805,7 @@ copy_r(struct selector_key *key)
         if (should_parse)
         {
             log(INFO, "it was a capa response\n");
-            check_if_pipe_present(ptr);
+            check_if_pipe_present(ptr, b);
             should_parse = 0;
         }
     }
@@ -1010,7 +1010,7 @@ void parse_command(char * ptr){
     }
 }
 
-void check_if_pipe_present(char * ptr){
+void check_if_pipe_present(char * ptr, buffer *b){
     int i = 0;
     int parsing_possible_pipe = 0;
     int state = BEGIN_P;
@@ -1114,6 +1114,20 @@ void check_if_pipe_present(char * ptr){
     }
     if(state != PIPELINING){
         log(INFO, "srv does not support pipelining");
+        ptr[i++] = 'P';
+        ptr[i++] = 'I';
+        ptr[i++] = 'P';
+        ptr[i++] = 'E';
+        ptr[i++] = 'L';
+        ptr[i++] = 'I';
+        ptr[i++] = 'N';
+        ptr[i++] = 'I';
+        ptr[i++] = 'N';
+        ptr[i++] = 'G';
+        ptr[i++] = '\n';
+        ptr[i++] = '.';
+        ptr[i++] = '\n';
+        buffer_write_adv(b, 13);
     }
 }
 
