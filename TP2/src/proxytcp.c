@@ -77,7 +77,7 @@ int should_parse;
 char * get_stats(void)
 {
     char * to_ret = malloc(100); //TODO: free este string
-    sprintf(to_ret, "Total Connections: %d\nConcurrent Connections: %d\nTotal Bytes Transferred: %d\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
+    sprintf(to_ret, "+%d %d %d", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
 
@@ -172,7 +172,7 @@ struct opt * get_opt(void){
 
 
 void 
-set_origin_address(struct address_data * address_data, const char * adress) 
+set_origin_address(struct address_data * address_data, const char * adress)
 {
     
     memset(&(address_data->origin_addr.addr_storage), 0, sizeof(address_data->origin_addr.addr_storage));
@@ -782,7 +782,7 @@ copy_ptr(struct selector_key * key)
     }
     return d;
 }
-
+void check_if_pipe_present(char * ptr);
 static unsigned
 copy_r(struct selector_key *key)
 {

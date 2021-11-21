@@ -91,6 +91,8 @@ help() {
     exit( EXIT_SUCCESS );
 }
 
+
+
 void
 version() {
     printf("%s %s\n", "pop3filter", VERSION);
@@ -103,6 +105,8 @@ usage(){
             "pop3filter [-hv] [-e <file>] [-l <pop3-address>] [-L <management-address>] [-o <management-port>] [-p <local-port>] [-P <origin-port>] [-t <cmd>] origin-server\n"
             );
 }
+
+
 
 void
 parse_options(int argc, char **argv, struct opt * opt) {
@@ -161,6 +165,8 @@ parse_options(int argc, char **argv, struct opt * opt) {
     }
     opt->origin_server = argv[optind];
 }
+
+
 
 
 

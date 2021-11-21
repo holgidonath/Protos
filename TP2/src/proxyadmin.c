@@ -322,7 +322,7 @@ static unsigned greeting(struct selector_key* key){
     buffer * buff = &admin->write_buffer;
     size_t buff_size;
 
-    char * greeting = "Welcome admin!\nLogin: ";
+    char * greeting = "+OK";
     greeting_size = strlen(greeting);
 
     uint8_t  * ptr = buffer_write_ptr(buff, &buff_size);

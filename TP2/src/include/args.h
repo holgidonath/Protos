@@ -23,6 +23,7 @@ struct opt {
     char *origin_server;         /* POP3 origin server address */
 };
 
+
 /* Environment variables */
 static char env_pop3filter_version[15];
 static char env_pop3_server[135];
