@@ -922,7 +922,7 @@ copy_w(struct selector_key *key)
 int parse_command(char * ptr){
     int i = 0;
     int state = BEGIN;
-    int rsp = FORWARD;
+    int rsp = 0;
     char c = toupper(ptr[0]);
     while(state != DONEPARSING){
        switch(state){
