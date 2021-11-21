@@ -6,7 +6,7 @@ LIBS =  logger
 CC_C = gcc
 PTHREADFLAG = -pthread
 SCTPFLAG	= -lsctp
-CFLAGS = -Wall -fsanitize=address -g -Wno-unused-variable -Wno-unused-but-set-variable
+CFLAGS = -Wall -fsanitize=address -g -Wno-unused-variable -Wno-unused-but-set-variable -Wno-switch
 
 all: clean proxy-server admin-ctl
 
