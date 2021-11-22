@@ -1010,6 +1010,7 @@ int parse_command(char * ptr, int n){
            break;
            case RETR:
            should_parse_retr = 1;
+           rsp = DONERETR;
            state = GOTORN;
            break;
            case U:
