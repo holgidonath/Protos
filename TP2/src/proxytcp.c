@@ -128,6 +128,9 @@ filter_recv(struct selector_key *key);
 static void
 socket_forwarding_cmd (struct selector_key * key, char *cmd);
 
+static void
+extern_cmd_finish(struct selector_key *key);
+
 int parse_command(char * ptr, int n);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
@@ -880,10 +883,10 @@ copy_r(struct selector_key *key) {
 }
 
 static unsigned
-copy_w(struct selector_key *key)
-{
+copy_w(struct selector_key *key) {
+    struct connection *conn = ATTACHMENT(key);
+    struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct copy *d = copy_ptr(key);
-    //log(INFO, "d->fd = %d         key->fd = %d\n", *d->fd, key->fd);
     assert(*d->fd == key->fd);
 
     size_t size;
@@ -892,44 +895,73 @@ copy_w(struct selector_key *key)
     buffer* b       = d->wb;
     unsigned ret    = COPY;
 
-    uint8_t *ptr = buffer_read_ptr(b, &size);
+    if ( conn->has_filtered_mail ) {
+        // from external command
+        uint8_t *ptr;
+        size_t count;
+        ptr = buffer_read_ptr(filter->filtered_mail_buffer, &count);
+        n = send(conn->client_fd, ptr, count, MSG_NOSIGNAL);
+        metrics->bytes_transfered += n;
 
-     if(key->fd == ATTACHMENT(key)->client_fd){
-         if(!ATTACHMENT(key)->was_greeted){
-             bool greeting = parse_greeting(ptr, key);
-             if(greeting){
-                log(INFO, "greeting recieved");
-             }
-         }else {
-             // parse_response();
-         }
-        
-     }
+        if (conn->filtered_all_mail) {
+            extern_cmd_finish(key);
+        }
+        buffer_reset(filter->filtered_mail_buffer);
 
-    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-    if(n == -1)
-    {
+    } else {
+        // send to server
+        uint8_t *ptr = buffer_read_ptr(b, &size);
+
+        if(key->fd == conn->client_fd){
+            if(!ATTACHMENT(key)->was_greeted){
+                bool greeting = parse_greeting(ptr, key);
+                if(greeting){
+                    log(INFO, "greeting recieved");
+                }
+            }else {
+                // parse_response();
+            }
+
+        }
+        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    }
+
+    if( n == -1 ) {
+        ret = PERROR;
         shutdown(*d->fd, SHUT_WR);
         d->duplex &= ~OP_WRITE;
-        if(*d->other->fd != -1)
-        {
+        if(*d->other->fd != -1) {
             shutdown(*d->other->fd, SHUT_RD);
             d->other->duplex &= ~OP_READ;
         }
-    }
-    else
-    {
+
+    } else {
+        conn->has_filtered_mail = false;
         buffer_read_adv(b,n);
     }
+
     copy_compute_interests(key->s, d);
     copy_compute_interests(key->s, d->other);
-    if(d->duplex == OP_NOOP)
-    {
+    if(d->duplex == OP_NOOP) {
         ret = DONE;
     }
+
     return ret;
 }
 
+
+static void
+extern_cmd_finish(struct selector_key *key) {
+    struct connection *conn = ATTACHMENT(key);
+
+    close(conn->r_from_filter_fds[READ]);
+    selector_unregister_fd(key->s, conn->w_to_filter_fds[WRITE]);
+    selector_unregister_fd(key->s, conn->r_from_filter_fds[READ]);
+    conn->w_to_filter_fds[READ]     = -1;
+    conn->w_to_filter_fds[WRITE]    = -1;
+    conn->r_from_filter_fds[READ]   = -1;
+    conn->r_from_filter_fds[WRITE]  = -1;
+}
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
