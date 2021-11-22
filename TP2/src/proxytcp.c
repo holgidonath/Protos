@@ -1034,6 +1034,7 @@ int parse_command(char * ptr, int n){
            case CAP:
            if(c == 'A'){
                state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
+               should_parse = 1;
            }else{
                state = GOTORN;
            }
