@@ -70,6 +70,7 @@
 #define CONTRABARRAR        50
 #define NEWLINE             51
 #define DONEPARSING         52
+#define ARGUMENTS           53
 
 
 struct opt opt;
@@ -131,7 +132,7 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd);
 static void
 extern_cmd_finish(struct selector_key *key);
 
-int parse_command(char * ptr, int n);
+int parse_command(char * ptr);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
@@ -798,12 +799,12 @@ copy_ptr(struct selector_key * key)
 }
 void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
-copy_r(struct selector_key *key) {
+copy_r(struct selector_key *key){
     log(DEBUG, "==== COPY_R ====");
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
 
-    int command_state;
+
 
     size_t size;
     ssize_t n;
@@ -815,117 +816,56 @@ copy_r(struct selector_key *key) {
     n = recv(key->fd, ptr, size, 0);
     buffer_write_adv(b,n);
 
-    if( n > 0 ) {
-        log(INFO, "str length is %d", n);
-        metrics->bytes_transfered += n;
+    if( n > 0 )
+    {
 
-        if(ptr[0] == '+'){
-            log(INFO, "Response from server:\n%s", ptr);
-            if (should_parse)
-            {
-                log(INFO, "it was a capa response\n");
-                check_if_pipe_present(ptr, b);
-                should_parse = 0;
-            }
-            if(should_parse_retr){
-                log(INFO, "it was a retr response\n");
-                should_parse_retr = 0;
-            }
-        }
-
-        if(key->fd == ATTACHMENT(key)->client_fd){
-            if(ptr[0] == 'R'){
-                log(INFO,"possible retr found");
-            }
-            command_state = parse_command(ptr, n);
-            if(command_state == DONERETR) {
-                ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
-                if(opt.cmd) {
-                    log(INFO, "copy_r: Going through an external command...");
-                    ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
-                    socket_forwarding_cmd(key, opt.cmd);
-                    selector_status ss = SELECTOR_SUCCESS;
-                    selector_register(key->s,
-                                      ATTACHMENT(key)->w_to_filter_fds[WRITE],
-                                      &proxy_handler,
-                                      OP_WRITE,
-                                      key->data);
-                    selector_fd_set_nio(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
-                    ss |= selector_set_interest_key(key, OP_NOOP);
-                    ss |= selector_set_interest(key->s,
-                                                ATTACHMENT(key)->w_to_filter_fds[WRITE],
-                                                OP_WRITE);
-                    ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
-                }
-            }
-        }
 
     } else {
         log(ERROR, "copy_r: failed to read");
         shutdown(*d->fd, SHUT_RD);
         d->duplex &= ~OP_READ;
-        if(*d->other->fd != -1){
+        if(*d->other->fd != -1)
+        {
             shutdown(*d->other->fd, SHUT_WR);
             d->other->duplex &= ~OP_WRITE;
         }
     }
 
-    if( ret != FILTER ) {
         copy_compute_interests(key->s, d);
         copy_compute_interests(key->s, d->other);
 
         if(d->duplex == OP_NOOP) {
             ret = DONE;
         }
-    }
 
     return ret;
 }
 
 static unsigned
-copy_w(struct selector_key *key) {
+copy_w(struct selector_key *key){
     struct connection *conn = ATTACHMENT(key);
     struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
-
+    int command = 0;
     size_t size;
     ssize_t n;
 
     buffer* b       = d->wb;
     unsigned ret    = COPY;
 
-    if ( conn->has_filtered_mail ) {
-        // from external command
-        uint8_t *ptr;
-        size_t count;
-        ptr = buffer_read_ptr(filter->filtered_mail_buffer, &count);
-        n = send(conn->client_fd, ptr, count, MSG_NOSIGNAL);
-        metrics->bytes_transfered += n;
 
-        if (conn->filtered_all_mail) {
-            extern_cmd_finish(key);
-        }
-        buffer_reset(filter->filtered_mail_buffer);
-
-    } else {
-        // send to server
         uint8_t *ptr = buffer_read_ptr(b, &size);
 
-        if(key->fd == conn->client_fd){
-            if(!ATTACHMENT(key)->was_greeted){
-                bool greeting = parse_greeting(ptr, key);
-                if(greeting){
-                    log(INFO, "greeting recieved");
-                }
-            }else {
-                // parse_response();
-            }
-
+        if(key->fd == conn->origin_fd && size > 1)
+        {
+           command = parse_command(ptr);
+           log(INFO, "command:%d",command);
+           n = send(key->fd, ptr, command, MSG_NOSIGNAL);
         }
-        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-    }
-
+        else {
+            n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+        }
     if( n == -1 ) {
         ret = PERROR;
         shutdown(*d->fd, SHUT_WR);
@@ -942,7 +882,8 @@ copy_w(struct selector_key *key) {
 
     copy_compute_interests(key->s, d);
     copy_compute_interests(key->s, d->other);
-    if(d->duplex == OP_NOOP) {
+    if(d->duplex == OP_NOOP)
+    {
         ret = DONE;
     }
 
@@ -965,13 +906,249 @@ extern_cmd_finish(struct selector_key *key) {
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
-int parse_command(char * ptr, int n){
+int parse_command(char * ptr)
+{
+    int i = 0;
+    int args_i = 0;
+    int state = BEGIN;
+    char args_buff[2048] = {0};
+    char c = toupper(ptr[0]);
+    while(state != DONEPARSING) {
+        log(INFO, "%c", c);
+        switch (state) {
+            case BEGIN:
+                if(c == 'R'){
+                    state = R;
+                }else if(c == 'U'){
+                    state = U;
+                }else if(c == 'C'){
+                    state = C;
+                }else if(c == 'P'){
+                    state = P;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }
+                else
+                {
+                    state = GOTORN;
+                }
+                break;
+
+            case U:
+                if (c == 'S') {
+                    state = US;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case US:
+                if (c == 'E') {
+                    state = USE;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case USE:
+                if (c == 'R') {
+                    state = USER;
+
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case USER:
+                if (c == ' ') {
+                    state = ARGUMENTS;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case P:
+                if (c == 'A') {
+                    state = PA;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case PA:
+                if (c == 'S') {
+                    state = PAS;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case PAS:
+                if (c == 'S') {
+                    state = PASS;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case PASS:
+                if (c == ' ') {
+                    state = ARGUMENTS;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                } else {
+                    state = GOTORN;
+                }
+                break;
+            case R:
+                if(c == 'E'){
+                    state = RE;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case RE:
+                if(c == 'T'){
+                    state = RET;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case RET:
+                if(c == 'R'){
+                    state = RETR;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }
+                else
+                {
+                    state = GOTORN;
+                }
+                break;
+            case RETR:
+                if(c == ' ') {
+                    state = ARGUMENTS;
+                    should_parse_retr = 1;
+                }
+                else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }
+                else
+                {
+                    state = GOTORN;
+                }
+                break;
+            case C:
+                if(c == 'A'){
+                    state = CA;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case CA:
+                if(c == 'P'){
+                    state = CAP;
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case CAP:
+                if(c == 'A'){
+                    state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
+                } else if(c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case CAPA:
+                if(c == '\r'){
+                    //log(INFO, "new line found");
+                    state = CONTRABARRAR;
+                    should_parse = 1;
+                }else{
+                    state = GOTORN;
+                }
+                break;
+            case ARGUMENTS:
+                if (c == '\r')
+                {
+                    state = CONTRABARRAR;
+                }
+                else {
+                    state = ARGUMENTS;
+                    args_buff[args_i++] = ptr[i];
+                }
+                break;
+
+            case CONTRABARRAR:
+                if (c == '\n') {
+                    log(INFO, "new line found");
+                    state = DONEPARSING;
+                }
+//                else {
+//                    state = GOTORN;
+//                }
+                break;
+
+            case GOTORN:
+                while(c != '\r')
+                {
+                    log(INFO,"%c",c);
+                    i++;
+                    c = toupper(ptr[i]);
+                }
+                state = CONTRABARRAR;
+                break;
+        }
+
+
+        i++;
+        c = toupper(ptr[i]);
+
+    }
+    return i;
+}
+
+
+int parse_command_old(char * ptr, int n){
     int i = 0;
     int state = BEGIN;
     int rsp = 0;
     char c = toupper(ptr[0]);
-    log(INFO, "%d", sizeof(ptr));
-    while(state != DONEPARSING){
+    while(state != DONEPARSING)
+    {
         log(INFO, "%c",c);
        switch(state){
            case BEGIN:
@@ -1035,15 +1212,7 @@ int parse_command(char * ptr, int n){
                state = GOTORN;
            }
            break;
-           case USER:
-           if(c == ' '){
-               parse_user(ptr);
-           //hay que ir copiando aca
-                state = GOTORN;
-           }else{
-               state = GOTORN;
-           }
-           break;
+
            case P:
            if(c == 'A'){
                state = PA;
@@ -1140,7 +1309,7 @@ int parse_command(char * ptr, int n){
             state = DONEPARSING;
         }
     }
-    return rsp;
+    return i;
 }
 
 void check_if_pipe_present(char * ptr, buffer *b){
