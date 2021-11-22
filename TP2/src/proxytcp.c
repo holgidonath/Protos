@@ -126,7 +126,7 @@ filter_recv(struct selector_key *key);
 static void
 socket_forwarding_cmd (struct selector_key * key, char *cmd);
 
-int parse_command(char * command);
+int parse_command(char * ptr, int n);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
@@ -805,7 +805,7 @@ copy_r(struct selector_key *key)
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-
+    log(INFO, "str length is %d", n);
     metrics->bytes_transfered += n;
 
     if(ptr[0] == '+'){
@@ -826,7 +826,7 @@ copy_r(struct selector_key *key)
         if(ptr[0] == 'R'){
             log(INFO,"possible retr found");
         }
-        command_state = parse_command(ptr);
+        command_state = parse_command(ptr, n);
         if(command_state == DONERETR) {
             ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
         }
@@ -919,11 +919,12 @@ copy_w(struct selector_key *key)
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
-int parse_command(char * ptr){
+int parse_command(char * ptr, int n){
     int i = 0;
     int state = BEGIN;
     int rsp = 0;
     char c = toupper(ptr[0]);
+    log(INFO, "%d", sizeof(ptr));
     while(state != DONEPARSING){
        switch(state){
            case BEGIN:
@@ -1056,7 +1057,7 @@ int parse_command(char * ptr){
            case NEWLINE:
            //hacer lo del interest y demas
            log(INFO, "new line found");
-           state = DONEPARSING;
+           state = BEGIN;
            break;
            case DONERETR:
            log(INFO, "RETR was found");
@@ -1076,8 +1077,14 @@ int parse_command(char * ptr){
            state = CONTRABARRAR;
            break;
         }
-        i++;
-        c = toupper(ptr[i]);
+        // i++;
+        // c = toupper(ptr[i]);
+        if(i < n){
+            i++;
+            c = toupper(ptr[i]);
+        }else{
+            state = DONEPARSING;
+        }
     }
     return rsp;
 }
