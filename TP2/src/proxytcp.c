@@ -839,7 +839,7 @@ copy_r(struct selector_key *key) {
                 ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
                 if(opt.cmd) {
                     log(INFO, "copy_r: Going through an external command...");
-                    ATTACHMENT(key)->read_all_mail = ending_crlf_dot(b);
+                    ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
                     socket_forwarding_cmd(key, opt.cmd);
                     selector_status ss = SELECTOR_SUCCESS;
                     selector_register(key->s,
