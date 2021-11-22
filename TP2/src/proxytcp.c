@@ -1064,6 +1064,7 @@ int parse_command(char * ptr){
            state = GOTORN;
            break;
            case DONEUSER:
+           parse_user(ptr);
            //hay que ir copiando aca
            state = GOTORN;
            break;
@@ -1216,14 +1217,14 @@ bool parse_greeting(char * response, struct selector_key *key)
 char * parse_user(char * ptr){
     int i = 5;
     int idx = 0;
-    char * buff[1024];
+    char buff[1024] = "";
     while (ptr[i] != '\n') {
         buff[idx] = ptr[i];
-        log(INFO, "%c", buff[idx]);
+        //log(INFO, "%c", buff[idx]);
         i++;
         idx++;
     }
-    log(INFO,"%s",buff);
+    log(INFO,"User %s tried to login", buff);
     return buff;
 }
 
