@@ -97,6 +97,7 @@ struct connection
     bool                    was_retr;
     bool                    read_all_mail;
     bool                    has_filtered_mail;
+    bool                    filtered_all_mail;
 };
 
 
