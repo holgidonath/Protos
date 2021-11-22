@@ -81,6 +81,7 @@ static metrics_t metrics;
 
 int should_parse;
 int should_parse_retr;
+bool capa_found = false;
 
 char * get_stats(void)
 {
@@ -857,15 +858,21 @@ copy_w(struct selector_key *key){
 
         uint8_t *ptr = buffer_read_ptr(b, &size);
 
-        if(key->fd == conn->origin_fd && size > 1)
-        {
-           command = parse_command(ptr);
-           log(INFO, "command:%d",command);
-           n = send(key->fd, ptr, command, MSG_NOSIGNAL);
-        }
-        else {
-            n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-        }
+    if(key->fd == conn->origin_fd && size > 1)
+    {
+       command = parse_command(ptr);
+       log(INFO, "command:%d",command);
+       n = send(key->fd, ptr, command, MSG_NOSIGNAL);
+    } else if(key->fd == conn->client_fd && capa_found)
+    {
+        check_if_pipe_present(ptr, b);
+        capa_found = false;
+        size += 12;
+        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    }
+    else {
+        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    }
     if( n == -1 ) {
         ret = PERROR;
         shutdown(*d->fd, SHUT_WR);
@@ -1096,7 +1103,7 @@ int parse_command(char * ptr)
                 if(c == '\r'){
                     //log(INFO, "new line found");
                     state = CONTRABARRAR;
-                    should_parse = 1;
+                    capa_found = true;
                 }else{
                     state = GOTORN;
                 }
@@ -1312,108 +1319,93 @@ int parse_command_old(char * ptr, int n){
     return i;
 }
 
+
 void check_if_pipe_present(char * ptr, buffer *b){
     int i = 0;
-    int parsing_possible_pipe = 0;
+
     int state = BEGIN_P;
     while (ptr[i] != '.')
-    {   
-        log(INFO,"%c",ptr[i]);
-        if(ptr[i] != 'P' && !parsing_possible_pipe){
-            while (ptr[i] != '\n')
-            {
-                i++;
-            } 
-        }else{
-            parsing_possible_pipe = 1;
-            switch (state){
-                case BEGIN_P:
-                if(ptr[i] == 'P'){
-                    state=P;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case P:
-                if(ptr[i] == 'I'){
-                    state=PI;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PI:
-                if(ptr[i] == 'P'){
-                    state=PIP;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIP:
-                if(ptr[i] == 'E'){
-                    state=PIPE;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPE:
-                if(ptr[i] == 'L'){
-                    state=PIPEL;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPEL:
-                if(ptr[i] == 'I'){
-                    state=PIPELI;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPELI:
-                if(ptr[i] == 'N'){
-                    state=PIPELIN;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPELIN:
-                if(ptr[i] == 'I'){
-                    state=PIPELINI;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPELINI:
-                if(ptr[i] == 'N'){
-                    state=PIPELININ;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPELININ:
-                if(ptr[i] == 'G'){
-                    state=PIPELINING;
-                }else{
-                    parsing_possible_pipe = 0;
-                    state = BEGIN_P;
-                }
-                break;
-                case PIPELINING:
-                log(INFO, "srv supports pipelining");
-                parsing_possible_pipe = 0;
-                break;
+    {
+        switch (state){
+            case BEGIN_P:
+            if(ptr[i] == 'P'){
+                state=P;
+            }else{
+                state = BEGIN_P;
             }
+            break;
+            case P:
+            if(ptr[i] == 'I'){
+                state=PI;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PI:
+            if(ptr[i] == 'P'){
+                state=PIP;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIP:
+            if(ptr[i] == 'E'){
+                state=PIPE;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPE:
+            if(ptr[i] == 'L'){
+                state=PIPEL;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPEL:
+            if(ptr[i] == 'I'){
+                state=PIPELI;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPELI:
+            if(ptr[i] == 'N'){
+                state=PIPELIN;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPELIN:
+            if(ptr[i] == 'I'){
+                state=PIPELINI;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPELINI:
+            if(ptr[i] == 'N'){
+                state=PIPELININ;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPELININ:
+            if(ptr[i] == 'G'){
+                state=PIPELINING;
+            }else{
+                state = BEGIN_P;
+            }
+            break;
+            case PIPELINING:
+                if(ptr[i] == '\r'){
+                    log(INFO, "srv supports pipelining");
+                }
+
+            break;
         }
-        i++;  
+
+    i++;
     }
     if(state != PIPELINING){
         log(INFO, "srv does not support pipelining");
@@ -1427,10 +1419,12 @@ void check_if_pipe_present(char * ptr, buffer *b){
         ptr[i++] = 'I';
         ptr[i++] = 'N';
         ptr[i++] = 'G';
+        ptr[i++] = '\r';
         ptr[i++] = '\n';
         ptr[i++] = '.';
+        ptr[i++] = '\r';
         ptr[i++] = '\n';
-        buffer_write_adv(b, 13);
+        buffer_write_adv(b, 12);
     }
 }
 
