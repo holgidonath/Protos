@@ -431,12 +431,14 @@ int main(const int argc, char **argv) {
     {
         printf("Failed to create socket\n");
         close(sock);
+        exit(EXIT_FAILURE);
     }
     int con = connect(sock, (struct sockaddr*)&addr.mgmt_addr, addr.mgmt_addr_len);
     if (con < 0)
     {
         printf("Failed to connect to management\n");
         close(sock);
+        exit(EXIT_FAILURE);
     }
     int n = sctp_recvmsg(sock, incoming, BUFF_SIZE, NULL, 0,0,0);
     printf(incoming);
@@ -458,17 +460,3 @@ int main(const int argc, char **argv) {
     }
     return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

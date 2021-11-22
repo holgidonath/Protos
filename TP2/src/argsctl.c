@@ -52,7 +52,7 @@ port(const char *s) {
         || sl < 0 || sl > USHRT_MAX) {
         fprintf(stderr, "port should in in the range of 1-65536: %s\n", s);
         exit(1);
-        return 1;
+
     }
     return (unsigned short)sl;
 }
@@ -82,6 +82,7 @@ parse_admin_options(int argc, char **argv, struct admin_opt * opt) {
             case '?':
                 admin_usage();
                 printf("Invalid Arguments");
+                exit(1);
 
 
         }
