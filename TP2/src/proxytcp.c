@@ -972,6 +972,7 @@ int parse_command(char * ptr, int n){
     char c = toupper(ptr[0]);
     log(INFO, "%d", sizeof(ptr));
     while(state != DONEPARSING){
+        log(INFO, "%c",c);
        switch(state){
            case BEGIN:
            if(c == 'R'){
@@ -1027,14 +1028,18 @@ int parse_command(char * ptr, int n){
            break;
            case USE:
            if(c == 'R'){
-               state = USER;
+                parse_user(ptr);
+                //hay que ir copiando aca
+                state = GOTORN;
            }else{
                state = GOTORN;
            }
            break;
            case USER:
            if(c == ' '){
-               state = DONEUSER;
+               parse_user(ptr);
+           //hay que ir copiando aca
+                state = GOTORN;
            }else{
                state = GOTORN;
            }
@@ -1055,7 +1060,7 @@ int parse_command(char * ptr, int n){
            break;
            case PAS:
            if(c == 'S'){
-               state = PASS;
+               state = GOTORN;
            }else{
                state = GOTORN;
            }
@@ -1096,7 +1101,8 @@ int parse_command(char * ptr, int n){
            case CONTRABARRAR:
            if(c == '\n'){
                //log(INFO, "new line found");
-               state = NEWLINE;
+               log(INFO, "new line found");
+                state = BEGIN;
            }else{
                state=GOTORN;
            }
@@ -1118,6 +1124,7 @@ int parse_command(char * ptr, int n){
            break;
            case GOTORN:
            while(c != '\r'){
+               log(INFO,"%c",c);
                i++;
                c = toupper(ptr[i]);
            }
@@ -1141,7 +1148,8 @@ void check_if_pipe_present(char * ptr, buffer *b){
     int parsing_possible_pipe = 0;
     int state = BEGIN_P;
     while (ptr[i] != '.')
-    {
+    {   
+        log(INFO,"%c",ptr[i]);
         if(ptr[i] != 'P' && !parsing_possible_pipe){
             while (ptr[i] != '\n')
             {
