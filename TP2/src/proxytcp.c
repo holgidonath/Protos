@@ -8,7 +8,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <signal.h>
-
+#include <stdbool.h>
 #include <unistd.h>
 #include <sys/types.h>   // socket
 #include <sys/socket.h>  // socket
@@ -87,6 +87,8 @@ char * get_stats(void)
     sprintf(to_ret, "+Total connections: %lu\nConcurrent connections: %lu\nTotal bytes transferred: %lu\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
+bool
+ending_crlf_dot_crlf(buffer *b);
 
 static struct connection * connections = NULL;
 
@@ -374,6 +376,9 @@ new_connection(int client_fd)
         con->references = 1;
         con->was_greeted = false;
         con->was_retr = false;
+        con->has_filtered_mail = false;
+        con->read_all_mail = false;
+        con->filtered_all_mail = false;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
@@ -790,8 +795,8 @@ copy_ptr(struct selector_key * key)
 }
 void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
-copy_r(struct selector_key *key)
-{
+copy_r(struct selector_key *key) {
+    log(DEBUG, "==== COPY_R ====");
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
 
@@ -805,63 +810,72 @@ copy_r(struct selector_key *key)
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    log(INFO, "str length is %d", n);
-    metrics->bytes_transfered += n;
+    buffer_write_adv(b,n);
 
-    if(ptr[0] == '+'){
-        log(INFO, "Response from server:\n%s", ptr);
-        if (should_parse)
-        {
-            log(INFO, "it was a capa response\n");
-            check_if_pipe_present(ptr, b);
-            should_parse = 0;
-        }
-        if(should_parse_retr){
-            log(INFO, "it was a retr response\n");
-            should_parse_retr = 0;
-        }
-    }
+    if( n > 0 ) {
+        log(INFO, "str length is %d", n);
+        metrics->bytes_transfered += n;
 
-    if(key->fd == ATTACHMENT(key)->client_fd){
-        if(ptr[0] == 'R'){
-            log(INFO,"possible retr found");
+        if(ptr[0] == '+'){
+            log(INFO, "Response from server:\n%s", ptr);
+            if (should_parse)
+            {
+                log(INFO, "it was a capa response\n");
+                check_if_pipe_present(ptr, b);
+                should_parse = 0;
+            }
+            if(should_parse_retr){
+                log(INFO, "it was a retr response\n");
+                should_parse_retr = 0;
+            }
         }
-        command_state = parse_command(ptr, n);
-        if(command_state == DONERETR) {
-            ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
+
+        if(key->fd == ATTACHMENT(key)->client_fd){
+            if(ptr[0] == 'R'){
+                log(INFO,"possible retr found");
+            }
+            command_state = parse_command(ptr, n);
+            if(command_state == DONERETR) {
+                ATTACHMENT(key)->was_retr = true; // el commnado fue un RETR
+                if(opt.cmd) {
+                    log(INFO, "copy_r: Going through an external command...");
+                    ATTACHMENT(key)->read_all_mail = ending_crlf_dot(b);
+                    socket_forwarding_cmd(key, opt.cmd);
+                    selector_status ss = SELECTOR_SUCCESS;
+                    selector_register(key->s,
+                                      ATTACHMENT(key)->w_to_filter_fds[WRITE],
+                                      &proxy_handler,
+                                      OP_WRITE,
+                                      key->data);
+                    selector_fd_set_nio(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
+                    ss |= selector_set_interest_key(key, OP_NOOP);
+                    ss |= selector_set_interest(key->s,
+                                                ATTACHMENT(key)->w_to_filter_fds[WRITE],
+                                                OP_WRITE);
+                    ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+                }
+            }
         }
-    } 
 
-    // log(INFO,"message captured");
-
-    if(n <=0 )
-    {
+    } else {
+        log(ERROR, "copy_r: failed to read");
         shutdown(*d->fd, SHUT_RD);
         d->duplex &= ~OP_READ;
-        if(*d->other->fd != -1)
-        {
+        if(*d->other->fd != -1){
             shutdown(*d->other->fd, SHUT_WR);
             d->other->duplex &= ~OP_WRITE;
         }
     }
-    else
-    {
-        metrics->bytes_transfered += n;
-        buffer_write_adv(b,n);
-        if (ATTACHMENT(key)->was_retr && opt.cmd){
-            log(DEBUG, "Going for an external process...")
 
-        }
-    }
     if( ret != FILTER ) {
-        log(INFO, "Nothing to filter")
         copy_compute_interests(key->s, d);
         copy_compute_interests(key->s, d->other);
+
+        if(d->duplex == OP_NOOP) {
+            ret = DONE;
+        }
     }
-    if(d->duplex == OP_NOOP)
-    {
-        ret = DONE;
-    }
+
     return ret;
 }
 
@@ -1288,7 +1302,24 @@ filter_send(struct selector_key *key) {
 
     return ret;
 }
+bool
+ending_crlf_dot_crlf(buffer *b) {
 
+    return *(b->write-1) == '\n' &&
+           *(b->write-2) == '\r' &&
+           *(b->write-3) == '.'  &&
+           *(b->write-4) == '\n' &&
+           *(b->write-5) == '\r';
+}
+
+bool
+is_err_response(buffer* buff){
+
+    return *buff->read     == '-' &&
+           *(buff->read+1) == 'E' &&
+           *(buff->read+2) == 'R' &&
+           *(buff->read+3) == 'R';
+}
 static unsigned
 filter_recv(struct selector_key *key) {
     struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
@@ -1303,11 +1334,8 @@ filter_recv(struct selector_key *key) {
     n = read(ATTACHMENT(key)->r_from_filter_fds[READ], ptr, count);
     if(n > 0) {
         buffer_write_adv(b, n);
-        ATTACHMENT(key)->read_all_mail = *(b->write-1) == '\n' &&
-                                                    *(b->write-2) == '\r' &&
-                                                    *(b->write-3) == '.'  &&
-                                                    *(b->write-4) == '\n' &&
-                                                    *(b->write-5) == '\r';
+        // chequeo si se leyo el final del mail (CRLF . CRLF)
+        ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
         if (ATTACHMENT(key)->read_all_mail){
             close(ATTACHMENT(key)->r_from_filter_fds[READ]);
             selector_unregister_fd(key->s, ATTACHMENT(key)->r_from_filter_fds[READ]);
@@ -1316,12 +1344,14 @@ filter_recv(struct selector_key *key) {
         selector_status ss = SELECTOR_SUCCESS;
         ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
         ret = ss == SELECTOR_SUCCESS ? COPY : PERROR;
+
     }
     else if (n == 0) {
         selector_status ss = SELECTOR_SUCCESS;
         ss |= selector_set_interest_key(key, OP_NOOP);
         ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
         ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+
     }
     else {
         log(ERROR, "filter_recv: reading from file descriptor failed")
