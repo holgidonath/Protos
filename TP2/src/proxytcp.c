@@ -82,6 +82,7 @@ static metrics_t metrics;
 int should_parse;
 int should_parse_retr;
 bool capa_found = false;
+bool has_pipelining = true;
 
 char * get_stats(void)
 {
@@ -867,7 +868,9 @@ copy_w(struct selector_key *key){
     {
         check_if_pipe_present(ptr, b);
         capa_found = false;
-        size += 12;
+        if(!has_pipelining){
+            size += 12;
+        }
         n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     }
     else {
@@ -1399,6 +1402,7 @@ void check_if_pipe_present(char * ptr, buffer *b){
             break;
             case PIPELINING:
                 if(ptr[i] == '\r'){
+                    has_pipelining = true;
                     log(INFO, "srv supports pipelining");
                 }
 
@@ -1408,6 +1412,7 @@ void check_if_pipe_present(char * ptr, buffer *b){
     i++;
     }
     if(state != PIPELINING){
+        has_pipelining = false;
         log(INFO, "srv does not support pipelining");
         ptr[i++] = 'P';
         ptr[i++] = 'I';
