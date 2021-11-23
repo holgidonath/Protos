@@ -881,7 +881,14 @@ copy_r(struct selector_key *key){
         if(key->fd == conn->origin_fd)
         {
             has_written = true;
-            log(DEBUG, "READING FROM ORIGIN");
+            log(DEBUG, "READING FROM ORIGIN:%s", ptr);
+            if(should_parse_retr){
+                log(INFO, "parse retr");
+                socket_forwarding_cmd(key,opt.cmd);
+                should_parse_retr = 0;
+            }else{
+                log(INFO, "dont parse retr");
+            }
             copy_compute_interests_origin(key->s, d);
             copy_compute_interests_client(key->s, d->other);
         }
