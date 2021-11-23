@@ -873,23 +873,35 @@ copy_r(struct selector_key *key){
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    buffer_write_adv(b,n);
+
 
 
     if( n > 0 )
     {
         if(key->fd == conn->origin_fd)
         {
+            if(capa_found)
+            {
+                check_if_pipe_present(ptr, b);
+                if(!has_pipelining){
+                    n += 12;
+                }
+                capa_found = false;
+            }
+            buffer_write_adv(b,n);
             has_written = true;
             log(DEBUG, "READING FROM ORIGIN");
             copy_compute_interests_origin(key->s, d);
             copy_compute_interests_client(key->s, d->other);
+
         }
         else if(key->fd == conn->client_fd)
         {
+            buffer_write_adv(b,n);
             log(DEBUG, "READING FROM CLIENT");
             copy_compute_interests_client(key->s, d);
             copy_compute_interests_origin(key->s, d->other);
+
         }
 
     } else {
@@ -1220,7 +1232,7 @@ int parse_command(char * ptr)
                 break;
 
             case GOTORN:
-                while(c != '\r')
+                while(c != '\r' && c != '\n')
                 {
                     log(INFO,"%c",c);
                     i++;
@@ -1490,7 +1502,7 @@ void check_if_pipe_present(char * ptr, buffer *b){
             case PIPELINING:
                 if(ptr[i] == '\r'){
                     has_pipelining = true;
-                    log(INFO, "srv supports pipelining");
+                    log(INFO, "Origin supports pipelining");
                 }
 
             break;
@@ -1500,7 +1512,7 @@ void check_if_pipe_present(char * ptr, buffer *b){
     }
     if(state != PIPELINING){
         has_pipelining = false;
-        log(INFO, "srv does not support pipelining");
+        log(INFO, "Origin does not support pipelining");
         ptr[i++] = 'P';
         ptr[i++] = 'I';
         ptr[i++] = 'P';
@@ -1516,7 +1528,6 @@ void check_if_pipe_present(char * ptr, buffer *b){
         ptr[i++] = '.';
         ptr[i++] = '\r';
         ptr[i++] = '\n';
-        buffer_write_adv(b, 12);
     }
 }
 
