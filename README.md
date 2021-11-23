@@ -13,8 +13,10 @@ y esto genera dentro de la misma carpeta de los archivos fuente los binarios `po
 ### Modo de uso
 #### pop3filter
 Se debe ejecutar el comando `./pop3filter [opciones] [dirección donde montar]`
+
 Donde en la dirección se debe especificar aquella donde se quiere montar el servidor.
 El ejecutable soporta las siguientes opciones:
+
 `-e <error-file>`: Configura el archivo de error al cual se redirije stderr. El valor por defecto es /dev/null.
 
 
