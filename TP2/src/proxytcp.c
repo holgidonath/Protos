@@ -85,6 +85,7 @@ bool capa_found = false;
 bool has_pipelining = true;
 bool has_written = false;
 bool greeted = true;
+char user_buffer[1024] = "";
 
 char * get_stats(void)
 {
@@ -139,7 +140,7 @@ extern_cmd_finish(struct selector_key *key);
 int parse_command(char * ptr);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
-char * parse_user(char * ptr);
+void parse_user(char* buffer_dest, char * ptr);
 
 static const struct state_definition client_statbl[] =
 {
@@ -1088,6 +1089,8 @@ int parse_command(char * ptr)
                 break;
             case USE:
                 if (c == 'R') {
+                    parse_user(user_buffer, ptr);
+                    log(INFO, "el usuario es %s", user_buffer);
                     state = USER;
 
                 } else if(c == '\r')
@@ -1336,7 +1339,7 @@ int parse_command_old(char * ptr, int n){
            break;
            case USE:
            if(c == 'R'){
-                parse_user(ptr);
+                //parse_user(ptr);
                 //hay que ir copiando aca
                 state = GOTORN;
            }else{
@@ -1418,7 +1421,7 @@ int parse_command_old(char * ptr, int n){
            state = GOTORN;
            break;
            case DONEUSER:
-           parse_user(ptr);
+           //parse_user(ptr);
            //hay que ir copiando aca
            state = GOTORN;
            break;
@@ -1564,7 +1567,7 @@ bool parse_greeting(char * response, struct selector_key *key)
     return false;
 }
 
-char * parse_user(char * ptr){
+void parse_user(char* buffer_dest, char * ptr){
     int i = 5;
     int idx = 0;
     char buff[1024] = "";
@@ -1574,8 +1577,8 @@ char * parse_user(char * ptr){
         i++;
         idx++;
     }
+    strcpy(buffer_dest, buff);
     log(INFO,"User %s tried to login", buff);
-    return buff;
 }
 
 
