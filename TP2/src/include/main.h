@@ -7,15 +7,20 @@
 
 
 /* Read and set cmd line options POSIX style */
-void parse_options(int argc, char **argv, struct opt *opt);
+void
+parse_options(int argc, char **argv, struct opt *opt);
 
 /* Display help */
-void help();
+void
+help();
 
 /* Display usage */
-void usage();
+void
+usage();
 
 /* Display version related info */
-void version();
+void
+version();
+
 
 #endif

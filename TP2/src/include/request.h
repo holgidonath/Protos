@@ -169,4 +169,5 @@ enum socks_response_status
 cmd_resolve(struct request* request,  struct sockaddr **originaddr,
             socklen_t *originlen, int *domain);
 
+
 #endif

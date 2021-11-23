@@ -28,8 +28,14 @@ enum responses {
 	ERR
 };
 
-int init_socket_admin(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, struct opt opt);
-void resolve_admin_client(int admin_fd, fd_set * read_fds, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
-void resolve_sctp_client(int admin_fd, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
+int
+init_socket_admin(struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, struct opt opt);
+
+void
+resolve_admin_client(int admin_fd, fd_set * read_fds, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
+
+void
+resolve_sctp_client(int admin_fd, struct sockaddr_in * admin_addr, socklen_t * admin_addr_length, metrics_t metrics);
+
 
 #endif

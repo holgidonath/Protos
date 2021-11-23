@@ -11,7 +11,11 @@ struct metrics {
     uint32_t bytes_transfered;
 };
 
-metrics_t init_metrics(void);
-void free_metrics(metrics_t metrics);
+metrics_t
+init_metrics(void);
+
+void
+free_metrics(metrics_t metrics);
+
 
 #endif

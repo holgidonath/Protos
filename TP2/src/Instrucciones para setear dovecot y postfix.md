@@ -46,9 +46,9 @@ Ahora lo que resta es mandar un mail (con postfix, `nc localhost 25` y así, ase
 
 Luego para comprobar podemos conectarnos al servidor (`nc localhost 1110`)
 
-Y ahí nos autenticamos 
+Y ahí nos autenticamos:
 `USER userprotos `
 `PASS laquesea`
-y pedimos los mails 
+Y pedimos los mails: 
 `LIST`
-y debería aparecer el que acabamos de enviar.
+Y debería aparecer el que acabamos de enviar.

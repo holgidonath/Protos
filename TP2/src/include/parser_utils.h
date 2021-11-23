@@ -36,4 +36,5 @@ parser_utils_strcmpi(const char *s);
 void
 parser_utils_strcmpi_destroy(const struct parser_definition *p);
 
+
 #endif
