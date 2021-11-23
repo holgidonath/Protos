@@ -121,14 +121,14 @@ resolve_done(struct selector_key * key);
 static void *
 resolve_blocking(void * data);
 
-static void
-filter_init(const unsigned state, struct selector_key *key);
-
-static unsigned
-filter_send(struct selector_key *key);
-
-static unsigned
-filter_recv(struct selector_key *key);
+//static void
+//filter_init(const unsigned state, struct selector_key *key);
+//
+//static unsigned
+//filter_send(struct selector_key *key);
+//
+//static unsigned
+//filter_recv(struct selector_key *key);
 
 static void
 socket_forwarding_cmd (struct selector_key * key, char *cmd);
@@ -154,9 +154,9 @@ static const struct state_definition client_statbl[] =
     },
     {
         .state            = FILTER,
-        .on_arrival       = filter_init,
-        .on_read_ready    = filter_recv,
-        .on_write_ready   = filter_send,
+//        .on_arrival       = filter_init,
+//        .on_read_ready    = filter_recv,
+//        .on_write_ready   = filter_send,
     },
     {
         .state = COPY,
@@ -897,9 +897,12 @@ copy_r(struct selector_key *key){
                 if (opt.cmd)
                 {
                     socket_forwarding_cmd(key,opt.cmd);
+                    buffer_reset(b);
+                    n = recv(conn->extern_cmd.pipe_out[WRITE], ptr, size, 0);
+                    buffer_write_adv(b,n);
                 }
                 should_parse_retr = 0;
-                ret = FILTER;
+                //ret = FILTER;
             }else{
                 log(INFO, "dont parse retr");
             }
@@ -1582,112 +1585,112 @@ char * parse_user(char * ptr){
 //-----------------------------------------------------------------------------------------------------------------
 //                                      EXTERN COMMAND
 //-----------------------------------------------------------------------------------------------------------------
-static void
-filter_init(const unsigned state, struct selector_key *key) {
-    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-
-    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
-    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
-}
-
-static unsigned
-filter_send(struct selector_key *key) {
-    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-    enum proxy_states ret;
-
-    size_t   count;
-    ssize_t  n;
-    buffer  *b = d->mail_buffer;
-    uint8_t *ptr;
-
-    ptr = buffer_read_ptr(b, &count);
-    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], ptr, count);
-    if (n == 0) {
-        selector_status ss = SELECTOR_SUCCESS;
-        ss |= selector_set_interest_key(key, OP_NOOP);
-        ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-        ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
-
-    } if(n == -1) {
-        log(ERROR, "filter_send: writing to file descriptor failed")
-        ret = ERROR;
-
-    } else {
-        selector_status ss = SELECTOR_SUCCESS;
-        if (ATTACHMENT(key)->read_all_mail){
-            close(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
-            selector_unregister_fd(key->s, ATTACHMENT(key)->w_to_filter_fds[WRITE]);
-            buffer_reset(b);
-            ss |= selector_set_interest(key->s, ATTACHMENT(key)->r_from_filter_fds[READ], OP_READ);
-            ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
-        } else {
-            buffer_reset(b);
-            ss |= selector_set_interest_key(key, OP_NOOP);
-            ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-            ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
-        }
-    }
-
-    return ret;
-}
-bool
-ending_crlf_dot_crlf(buffer *b) {
-
-    return *(b->write-1) == '\n' &&
-           *(b->write-2) == '\r' &&
-           *(b->write-3) == '.'  &&
-           *(b->write-4) == '\n' &&
-           *(b->write-5) == '\r';
-}
-
-bool
-is_err_response(buffer* buff){
-
-    return *buff->read     == '-' &&
-           *(buff->read+1) == 'E' &&
-           *(buff->read+2) == 'R' &&
-           *(buff->read+3) == 'R';
-}
-static unsigned
-filter_recv(struct selector_key *key) {
-    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-    enum proxy_states ret = FILTER;
-    size_t  count;
-    ssize_t  n;
-    uint8_t *ptr;
-
-    buffer  *b = d->filtered_mail_buffer;
-    buffer_reset(b);
-    ptr = buffer_write_ptr(b, &count);
-    n = read(ATTACHMENT(key)->r_from_filter_fds[READ], ptr, count);
-    if(n > 0) {
-        buffer_write_adv(b, n);
-        // chequeo si se leyo el final del mail (CRLF . CRLF)
-        ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
-        if (ATTACHMENT(key)->read_all_mail){
-            close(ATTACHMENT(key)->r_from_filter_fds[READ]);
-            selector_unregister_fd(key->s, ATTACHMENT(key)->r_from_filter_fds[READ]);
-        }
-        ATTACHMENT(key)->has_filtered_mail = true;
-        selector_status ss = SELECTOR_SUCCESS;
-        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
-        ret = ss == SELECTOR_SUCCESS ? COPY : PERROR;
-
-    }
-    else if (n == 0) {
-        selector_status ss = SELECTOR_SUCCESS;
-        ss |= selector_set_interest_key(key, OP_NOOP);
-        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-        ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
-
-    }
-    else {
-        log(ERROR, "filter_recv: reading from file descriptor failed")
-        ret = ERROR;
-    }
-
-    return ret;
-}
+//static void
+//filter_init(const unsigned state, struct selector_key *key) {
+//    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+//
+//    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
+//    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
+//}
+//
+//static unsigned
+//filter_send(struct selector_key *key) {
+//    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+//    enum proxy_states ret;
+//
+//    size_t   count;
+//    ssize_t  n;
+//    buffer  *b = d->mail_buffer;
+//    uint8_t *ptr;
+//
+//    ptr = buffer_read_ptr(b, &count);
+//    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], ptr, count);
+//    if (n == 0) {
+//        selector_status ss = SELECTOR_SUCCESS;
+//        ss |= selector_set_interest_key(key, OP_NOOP);
+//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+//        ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
+//
+//    } if(n == -1) {
+//        log(ERROR, "filter_send: writing to file descriptor failed")
+//        ret = ERROR;
+//
+//    } else {
+//        selector_status ss = SELECTOR_SUCCESS;
+//        if (ATTACHMENT(key)->read_all_mail){
+//            close(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
+//            selector_unregister_fd(key->s, ATTACHMENT(key)->w_to_filter_fds[WRITE]);
+//            buffer_reset(b);
+//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->r_from_filter_fds[READ], OP_READ);
+//            ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+//        } else {
+//            buffer_reset(b);
+//            ss |= selector_set_interest_key(key, OP_NOOP);
+//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
+//            ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
+//        }
+//    }
+//
+//    return ret;
+//}
+//bool
+//ending_crlf_dot_crlf(buffer *b) {
+//
+//    return *(b->write-1) == '\n' &&
+//           *(b->write-2) == '\r' &&
+//           *(b->write-3) == '.'  &&
+//           *(b->write-4) == '\n' &&
+//           *(b->write-5) == '\r';
+//}
+//
+//bool
+//is_err_response(buffer* buff){
+//
+//    return *buff->read     == '-' &&
+//           *(buff->read+1) == 'E' &&
+//           *(buff->read+2) == 'R' &&
+//           *(buff->read+3) == 'R';
+//}
+//static unsigned
+//filter_recv(struct selector_key *key) {
+//    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+//    enum proxy_states ret = FILTER;
+//    size_t  count;
+//    ssize_t  n;
+//    uint8_t *ptr;
+//
+//    buffer  *b = d->filtered_mail_buffer;
+//    buffer_reset(b);
+//    ptr = buffer_write_ptr(b, &count);
+//    n = read(ATTACHMENT(key)->r_from_filter_fds[READ], ptr, count);
+//    if(n > 0) {
+//        buffer_write_adv(b, n);
+//        // chequeo si se leyo el final del mail (CRLF . CRLF)
+//        ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
+//        if (ATTACHMENT(key)->read_all_mail){
+//            close(ATTACHMENT(key)->r_from_filter_fds[READ]);
+//            selector_unregister_fd(key->s, ATTACHMENT(key)->r_from_filter_fds[READ]);
+//        }
+//        ATTACHMENT(key)->has_filtered_mail = true;
+//        selector_status ss = SELECTOR_SUCCESS;
+//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
+//        ret = ss == SELECTOR_SUCCESS ? COPY : PERROR;
+//
+//    }
+//    else if (n == 0) {
+//        selector_status ss = SELECTOR_SUCCESS;
+//        ss |= selector_set_interest_key(key, OP_NOOP);
+//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
+//        ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
+//
+//    }
+//    else {
+//        log(ERROR, "filter_recv: reading from file descriptor failed")
+//        ret = ERROR;
+//    }
+//
+//    return ret;
+//}
 
 /* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
 static void
@@ -1695,8 +1698,10 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
     int n;
     // pipe_in (w_to_filter_fds ): father --> child
     // pipe_out (r_from_filter_fds): child  --> father
-    int *pipe_in = ATTACHMENT(key)->w_to_filter_fds;
-    int *pipe_out = ATTACHMENT(key)->r_from_filter_fds;
+    struct connection * conn = ATTACHMENT(key);
+    struct extern_cmd * filter = (struct extern_cmd *) &conn->extern_cmd;
+    int *pipe_in = filter->pipe_in;
+    int *pipe_out = filter->pipe_out;
 
     if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
         log(FATAL, "socket_forwarding_cmd: Cannot create pipe");
@@ -1709,10 +1714,9 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
         dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
         close(pipe_in[WRITE]);
         close(pipe_out[READ]);
-        log(INFO, "socket_forwarding_cmd: executing command");
-        n = system(cmd);
-        log(DEBUG, "socket_forwarding_cmd: BACK from executing command");
-        _exit(n);
+//        env_var_init(username); // TODO global username
+        system(cmd);
+        worker_secondary(&key); // escribe output del proceso en STDOUT
     } else {
         close(pipe_in[READ]);
         close(pipe_out[WRITE]);
@@ -1721,13 +1725,13 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
         ss |= selector_register(key->s,
                                 pipe_in[WRITE],
                                 &proxy_handler,
-                                OP_WRITE,
+                                OP_NOOP,
                                 key->data);
 
         ss |= selector_register(key->s,
                                 pipe_out[READ],
                                 &proxy_handler,
-                                OP_READ,
+                                OP_NOOP,
                                 key->data);
 
         selector_fd_set_nio(pipe_in[WRITE]);

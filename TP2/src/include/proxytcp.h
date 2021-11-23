@@ -89,9 +89,7 @@ struct connection
     bool                    was_greeted;
 
     /* External Process */
-    union {
-        struct extern_cmd    extern_cmd;
-    } extern_cmd;
+    struct extern_cmd    extern_cmd;
     int                     w_to_filter_fds[2];
     int                     r_from_filter_fds[2];
     bool                    was_retr;

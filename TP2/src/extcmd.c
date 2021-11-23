@@ -12,9 +12,6 @@
 /* ==================================================== */
 
 int
-write_buffer_to_filter(struct selector_key *key, buffer* buff);
-
-int
 read_ext_cmd(struct selector_key *key, buffer* buff);
 
 void
@@ -39,41 +36,10 @@ env_var_init(char *username) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
     }
 
-    sprintf(env_pop3_server, "POP3_USERNAME=%s", opt->origin_server);
+    sprintf(env_pop3_server, "POP3_USERNAME=%s", username);
     if(putenv(env_pop3_username)) {
         log(ERROR, "putenv() couldn't create %s environment variable", username);
     }
-}
-
-
-int
-write_buffer_to_filter(struct selector_key *key, buffer* buff) {
-    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-    buffer *sb = filter->wb;
-    uint8_t *b;
-    size_t count;
-    ssize_t n = 0;
-    size_t i = 0;
-
-    char c;
-    while (buffer_can_read(buff) && n == 0) {
-        c = buffer_read(buff);
-        i++;
-        if (c == '\n') {
-            n = i;
-        }
-        buffer_write(sb, c);
-    }
-
-    if (n == 0) {
-        return 0;
-    }
-
-    b = buffer_read_ptr(sb, &count);
-    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], b, count);
-    buffer_reset(sb);
-
-    return n;
 }
 
 int
@@ -83,3 +49,61 @@ read_ext_cmd(struct selector_key *key, buffer* buff) {
     log(ERROR, "read_ext_cmd: reading from file descriptor failed");
     return bytes_read;
 }
+
+void
+worker_secondary(struct selector_key *key) {
+    struct connection * conn = ATTACHMENT(key);
+    struct extern_cmd * filter = (struct extern_cmd *) &conn->extern_cmd;
+
+    uint8_t dataBuffer[2048];
+    ssize_t n;
+    do {
+        n = read(STDIN_FILENO, dataBuffer, sizeof(dataBuffer));
+        if(n > 0)
+            write(STDOUT_FILENO, dataBuffer, n);
+    } while(n > 0);
+    log(INFO, "worker_secondary: Back from reading from external cmd")
+
+    for(int i = 0; i < 2; i++) {
+        if(filter->pipe_in[i] > 0) {
+            selector_unregister_fd(key->s, filter->pipe_in[i]);
+            close(filter->pipe_in[i]);
+        }
+        if(filter->pipe_out[i] > 0) {
+            selector_unregister_fd(key->s, filter->pipe_out[i]);
+            close(filter->pipe_out[i]);
+        }
+    }
+    memset(filter, 0, sizeof(filter));
+}
+
+//
+//int
+//write_buffer_to_filter(struct selector_key *key, buffer* buff) {
+//    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+//    buffer *sb = filter->wb;
+//    uint8_t *b;
+//    size_t count;
+//    ssize_t n = 0;
+//    size_t i = 0;
+//
+//    char c;
+//    while (buffer_can_read(buff) && n == 0) {
+//        c = buffer_read(buff);
+//        i++;
+//        if (c == '\n') {
+//            n = i;
+//        }
+//        buffer_write(sb, c);
+//    }
+//
+//    if (n == 0) {
+//        return 0;
+//    }
+//
+//    b = buffer_read_ptr(sb, &count);
+//    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], b, count);
+//    buffer_reset(sb);
+//
+//    return n;
+//}
