@@ -1,15 +1,13 @@
 #ifndef PROTOS_EXTCMD_H
 #define PROTOS_EXTCMD_H
 
-#include "buffer.h"
 #include <stdbool.h>
+
+#include "buffer.h"
 #include "selector.h"
 
 #define READ 0
 #define WRITE 1
-
-void env_var_init(char *username);
-
 
 struct extern_cmd {
     buffer                  *mail_buffer;
@@ -18,4 +16,8 @@ struct extern_cmd {
     struct parser           *multi_parser;
 };
 
-#endif //PROTOS_EXTCMD_H
+void
+env_var_init(char *username);
+
+
+#endif

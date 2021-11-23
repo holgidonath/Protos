@@ -101,5 +101,4 @@ struct connection
 };
 
 
-
-#endif //PROTOS_PROXYTCP_H
+#endif

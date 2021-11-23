@@ -10,7 +10,6 @@ struct users {
     char *pass;
 };
 
-
 /* Commandline arguments */
 struct opt {
     short local_port;            /* local port */
@@ -23,11 +22,10 @@ struct opt {
     char *origin_server;         /* POP3 origin server address */
 };
 
-
 /* Environment variables */
 static char env_pop3filter_version[15];
 static char env_pop3_server[135];
 static char env_pop3_username[25];
 
-#endif
 
+#endif

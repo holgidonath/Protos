@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
-void *safe_malloc(size_t bytes);
+void *
+safe_malloc(size_t bytes);
 
-#endif //PROTOS_UTIL_H
+
+#endif

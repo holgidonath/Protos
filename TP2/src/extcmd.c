@@ -45,7 +45,6 @@ env_var_init(char *username) {
     }
 }
 
-
 int
 write_buffer_to_filter(struct selector_key *key, buffer* buff) {
     struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;

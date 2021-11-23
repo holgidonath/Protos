@@ -13,7 +13,7 @@
 
 
 void
-admin_usage(){
+admin_usage() {
     printf(
             "pop3ctl [-h] [-L <management-address>] [-o <management-port>]\n"
     );
@@ -95,8 +95,7 @@ parse_admin_options(int argc, char **argv, struct admin_opt * opt) {
 }
 
 void
-set_mgmt_address(struct address_data * address_data, const char * adress, struct admin_opt * opt)
-{
+set_mgmt_address(struct address_data * address_data, const char * adress, struct admin_opt * opt) {
     memset(&(address_data->mgmt_addr), 0, sizeof(address_data->mgmt_addr));
 
     address_data->mgmt_type = ADDR_IPV4;
@@ -109,8 +108,7 @@ set_mgmt_address(struct address_data * address_data, const char * adress, struct
     ipv4.sin_family = AF_INET;
     int result = 0;
 
-    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0)
-    {
+    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0) {
         address_data->mgmt_type   = ADDR_IPV6;
         address_data->mgmt_domain  = AF_INET6;
         address_data->mgmt_addr_len = sizeof(struct sockaddr_in6);
