@@ -2,15 +2,15 @@
 Para setear todo correctamente primero hacer: 
 `sudo apt purge postfix dovecot-common dovecot-imapd dovecot-pop3d`
 
-Estas instrucciones se realizarán en el usuario root: 
+Estas instrucciones se realizarán en el usuario root:
 `sudo su`
 
- #### Postfix
+#### Postfix
 
-Instalamos postfix: 
+Instalamos postfix:
 `apt-get install postfix`
 
-En el asistente elegimos 
+En el asistente elegimos:
 `"Sitio de Internet"`
 
 Ponemos el nombre que querramos (para estandarizar y facilitar monitoreo diría de poner 'protos.tpe')
@@ -21,7 +21,7 @@ Comprobar si existe `/etc/mailname`. En caso de que no, crearlo y poner el nombr
 
 #### Dovecot
 
-Instalamos dovecot: 
+Instalamos dovecot:
 `apt-get install dovecot-common dovecot-imapd dovecot-pop3d`
 
 Una vez que está vamos a `/etc/dovecot/dovecot.conf`, nos fijamos que haya una linea que diga algo como `!include try...` y fijarse que admita todo los protocolos (`/usr/share/dovecot/protocols.d/*.protocol`)
@@ -44,7 +44,7 @@ Ahora hacemos un `service postfix restart` (si en algún momento no funciona col
 
 Ahora lo que resta es mandar un mail (con postfix, `nc localhost 25` y así, asegurarse que se mande al usuario y dominio que eligieron, en este caso userprotos@protos.tpe)
 
-Luego para comprobar podemos conectarnos al servidor (`nc localhost 110`)
+Luego para comprobar podemos conectarnos al servidor (`nc localhost 1110`)
 
 Y ahí nos autenticamos 
 `USER userprotos `

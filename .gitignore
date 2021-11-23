@@ -64,3 +64,4 @@ out/
 # CMake
 cmake-build-*/
 pop3filter
+pop3ctl

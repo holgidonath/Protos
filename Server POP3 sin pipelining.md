@@ -1,4 +1,4 @@
-Si está instalado socat (fijarse con `man socat`) ejecutar
+Si está instalado socat (fijarse con `man socat`) ejecutar:
 
 `sudo socat TCP4-LISTEN:9091,crlf,reuseaddr SYSTEM:'[directory]',pty,echo=0`, donde [directory] es la ubicación del archivo pop3.awk
 
@@ -20,6 +20,6 @@ Si no está instalado, seguir el siguiente procedimiento:
 
 `sudo su`
 
- `make install`
+`make install`
  
-Y luego probar de nuevo
+Y luego probar de nuevo.

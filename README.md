@@ -49,7 +49,8 @@ El ejecutable soporta las siguientes opciones:
 
 `-h`: Imprime la ayuda.
 
+
 `-L <management-address>`: Configura la dirección en la cual el administrador va a escuchar. Por defecto usa loopback.
 
-`-o <management-port>`: Configura el puerto al cual el administrador se conecta. Por defecto es 9090.
 
+`-o <management-port>`: Configura el puerto al cual el administrador se conecta. Por defecto es 9090.
