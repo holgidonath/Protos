@@ -39,7 +39,7 @@ env_var_init(char *username) {
         log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
     }
 
-    sprintf(env_pop3_server, "POP3_USERNAME=%s", opt->origin_server);
+    sprintf(env_pop3_server, "POP3_USERNAME=%s", username);
     if(putenv(env_pop3_username)) {
         log(ERROR, "putenv() couldn't create %s environment variable", username);
     }

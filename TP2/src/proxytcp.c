@@ -1713,6 +1713,7 @@ socket_forwarding_cmd (struct selector_key * key, char *cmd) {
         close(pipe_in[WRITE]);
         close(pipe_out[READ]);
         log(INFO, "socket_forwarding_cmd: executing command");
+        env_var_init(user_buffer);
         n = system(cmd);
         log(DEBUG, "socket_forwarding_cmd: BACK from executing command");
         _exit(n);
