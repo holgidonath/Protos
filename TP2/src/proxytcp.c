@@ -901,6 +901,7 @@ copy_r(struct selector_key *key){
             shutdown(*d->other->fd, SHUT_WR);
             d->other->duplex &= ~OP_WRITE;
         }
+        ret = DONE;
     }
 
         if(d->duplex == OP_NOOP) {
@@ -963,7 +964,7 @@ copy_w(struct selector_key *key)
 //        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
 //    }
 
-    if( n == -1 ) {
+    if( n < 0 ) {
         ret = PERROR;
         shutdown(*d->fd, SHUT_WR);
         d->duplex &= ~OP_WRITE;
@@ -971,7 +972,7 @@ copy_w(struct selector_key *key)
             shutdown(*d->other->fd, SHUT_RD);
             d->other->duplex &= ~OP_READ;
         }
-
+        ret = DONE;
     }
     else {
         conn->has_filtered_mail = false;
