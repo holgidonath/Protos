@@ -878,17 +878,18 @@ copy_r(struct selector_key *key){
 
     if( n > 0 )
     {
+        buffer_write_adv(b,n);
         if(key->fd == conn->origin_fd)
         {
-            if(capa_found)
-            {
-                check_if_pipe_present(ptr, b);
-                if(!has_pipelining){
-                    n += 12;
-                }
-                capa_found = false;
-            }
-            buffer_write_adv(b,n);
+//            if(capa_found)
+//            {
+//                check_if_pipe_present(ptr, b);
+//                if(!has_pipelining){
+//                    n += 12;
+//                }
+//                capa_found = false;
+//            }
+//            buffer_write_adv(b,n);
             has_written = true;
             log(DEBUG, "READING FROM ORIGIN:%s", ptr);
             if(should_parse_retr){
@@ -898,6 +899,7 @@ copy_r(struct selector_key *key){
                     socket_forwarding_cmd(key,opt.cmd);
                 }
                 should_parse_retr = 0;
+                ret = FILTER;
             }else{
                 log(INFO, "dont parse retr");
             }
@@ -907,7 +909,7 @@ copy_r(struct selector_key *key){
         }
         else if(key->fd == conn->client_fd)
         {
-            buffer_write_adv(b,n);
+
             log(DEBUG, "READING FROM CLIENT");
             copy_compute_interests_client(key->s, d);
             copy_compute_interests_origin(key->s, d->other);
@@ -935,7 +937,7 @@ copy_r(struct selector_key *key){
 
 static unsigned
 copy_w(struct selector_key *key)
-        {
+{
     log(DEBUG, "==== COPY_W ====");
     struct connection *conn = ATTACHMENT(key);
     struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
@@ -972,6 +974,15 @@ copy_w(struct selector_key *key)
 
         log(DEBUG, "WRITING TO CLIENT");
         has_written = false;
+        if(capa_found)
+        {
+            check_if_pipe_present(ptr, b);
+            if(!has_pipelining){
+                size += 12;
+            }
+            buffer_write_adv(b, 12);
+            capa_found = false;
+        }
         n = send_to_client(ptr,size,key,d);
 
     }
@@ -1011,7 +1022,8 @@ copy_w(struct selector_key *key)
 
 
 static void
-extern_cmd_finish(struct selector_key *key) {
+extern_cmd_finish(struct selector_key *key)
+{
     struct connection *conn = ATTACHMENT(key);
 
     close(conn->r_from_filter_fds[READ]);
