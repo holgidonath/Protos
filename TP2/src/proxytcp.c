@@ -83,6 +83,8 @@ int should_parse;
 int should_parse_retr;
 bool capa_found = false;
 bool has_pipelining = true;
+bool has_written = false;
+bool greeted = true;
 
 char * get_stats(void)
 {
@@ -139,7 +141,7 @@ void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
 
-static const struct state_definition client_statbl[] = 
+static const struct state_definition client_statbl[] =
 {
     {
         .state            = RESOLVE_ORIGIN,
@@ -184,30 +186,30 @@ struct opt * get_opt(void){
 
 
 
-void 
+void
 set_origin_address(struct address_data * address_data, const char * adress)
 {
-    
+
     memset(&(address_data->origin_addr.addr_storage), 0, sizeof(address_data->origin_addr.addr_storage));
-    
+
     address_data->origin_type = ADDR_IPV4;
     address_data->origin_domain  = AF_INET;
     address_data->origin_addr_len = sizeof(struct sockaddr_in);
-    
 
-    struct sockaddr_in ipv4; 
+
+    struct sockaddr_in ipv4;
     memset(&(ipv4), 0, sizeof(ipv4));
     ipv4.sin_family = AF_INET;
     int result = 0;
 
-    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0) 
+    if((result = inet_pton(AF_INET, adress, &ipv4.sin_addr.s_addr)) <= 0)
     {
         address_data->origin_type   = ADDR_IPV6;
         address_data->origin_domain  = AF_INET6;
         address_data->origin_addr_len = sizeof(struct sockaddr_in6);
-    
 
-        struct sockaddr_in6 ipv6; 
+
+        struct sockaddr_in6 ipv6;
 
         memset(&(ipv6), 0, sizeof(ipv6));
 
@@ -222,11 +224,11 @@ set_origin_address(struct address_data * address_data, const char * adress)
             return;
         }
 
-        ipv6.sin6_port = htons(opt.origin_port); 
-        memcpy(&address_data->origin_addr.addr_storage, &ipv6, address_data->origin_addr_len);    
+        ipv6.sin6_port = htons(opt.origin_port);
+        memcpy(&address_data->origin_addr.addr_storage, &ipv6, address_data->origin_addr_len);
         return;
-    }    
-    ipv4.sin_port = htons(opt.origin_port); 
+    }
+    ipv4.sin_port = htons(opt.origin_port);
     memcpy(&address_data->origin_addr.addr_storage, &ipv4, address_data->origin_addr_len);
     return;
 }
@@ -306,7 +308,7 @@ proxy_destroy(struct connection * con){
         } else {
             con->references -= 1;
         }
-        
+
     }
 }
 
@@ -362,7 +364,7 @@ proxy_done(struct selector_key* key) {
 
 
 
-struct connection * 
+struct connection *
 new_connection(int client_fd)
 {
     struct connection * con;
@@ -371,7 +373,7 @@ new_connection(int client_fd)
     if (con != NULL)
     {
         memset(con, 0x00, sizeof(*con));
-        
+
         con->origin_fd = -1;
         con->client_fd = client_fd;
 
@@ -493,7 +495,7 @@ static unsigned origin_connect(struct selector_key * key) {
                     }
                     ATTACHMENT(key)->references += 1;
 
-                 } 
+                 }
 
             }
         else {
@@ -501,7 +503,7 @@ static unsigned origin_connect(struct selector_key * key) {
                 // abort();
             }
     }
-	
+
 
     return stm_next_status;
 
@@ -522,7 +524,7 @@ proxy_tcp_connection(struct selector_key *key)
     struct sockaddr_storage       client_addr;
     socklen_t                     client_addr_len = sizeof(client_addr);
     pthread_t thread_id;
-   
+
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
     if(client == -1) {
@@ -563,14 +565,14 @@ proxy_tcp_connection(struct selector_key *key)
         new_key->fd = client;
         new_key->data = connection;
 
-        
+
         if( pthread_create(&thread_id, 0, resolve_blocking, new_key) == -1 )
         {
             log(ERROR, "function resolve_start, pthread_create error.");
         }
 
     }
-    
+
 
     return;
 
@@ -687,14 +689,14 @@ resolve_blocking(void * data) {
     struct connection * connection = ATTACHMENT(key);
 
     pthread_detach(pthread_self());
-    
+
     connection->origin_resolution = 0;
     struct addrinfo hints = {
-        .ai_family    = AF_UNSPEC,    
+        .ai_family    = AF_UNSPEC,
         /** Permite IPv4 o IPv6. */
-        .ai_socktype  = SOCK_STREAM,  
-        .ai_flags     = AI_PASSIVE,   
-        .ai_protocol  = 0,        
+        .ai_socktype  = SOCK_STREAM,
+        .ai_flags     = AI_PASSIVE,
+        .ai_protocol  = 0,
         .ai_canonname = NULL,
         .ai_addr      = NULL,
         .ai_next      = NULL,
@@ -707,7 +709,7 @@ resolve_blocking(void * data) {
                     buff,
                     &hints,
                     &connection->origin_resolution
-                    ) != 0 ) 
+                    ) != 0 )
     {
         log(INFO, "connection_resolve_blocking, couldn't resolve address");
 
@@ -721,17 +723,17 @@ resolve_blocking(void * data) {
 
 
 static unsigned
-resolve_done(struct selector_key * key) 
+resolve_done(struct selector_key * key)
 {
     struct connection * connection = ATTACHMENT(key);
-    if(connection->origin_resolution != 0) 
+    if(connection->origin_resolution != 0)
     {
         connection->origin_data.origin_domain = connection->origin_resolution->ai_family;
         connection->origin_data.origin_addr_len = connection->origin_resolution->ai_addrlen;
         memcpy(&connection->origin_data.origin_addr.addr_storage,
                 connection->origin_resolution->ai_addr,
                 connection->origin_resolution->ai_addrlen);
-    } else 
+    } else
     {
 
         log(ERROR, "Failed to resolve origin domain\n");
@@ -745,6 +747,16 @@ resolve_done(struct selector_key * key)
 //-----------------------------------------------------------------------------------------------------------------
 //                                          COPY FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
 
 static void
 copy_init(const unsigned state, struct selector_key *key)
@@ -766,14 +778,14 @@ copy_init(const unsigned state, struct selector_key *key)
 }
 
 static fd_interest
-copy_compute_interests(fd_selector s, struct  copy* d)
+copy_compute_interests_origin(fd_selector s, struct  copy* d)
 {
     fd_interest ret = OP_NOOP;
-    if((d->duplex & OP_READ) && buffer_can_write(d->rb))
+    if((d->duplex & OP_READ) && buffer_can_write(d->rb) && has_written)
     {
         ret |= OP_READ;
     }
-    if((d->duplex & OP_WRITE) && buffer_can_read(d->wb))
+    if((d->duplex & OP_WRITE) && buffer_can_read(d->wb) && !has_written)
     {
         ret |= OP_WRITE;
     }
@@ -782,6 +794,25 @@ copy_compute_interests(fd_selector s, struct  copy* d)
         abort();
     }
     return ret;
+}
+
+static fd_interest
+copy_compute_interests_client(fd_selector s, struct  copy* d)
+{
+fd_interest ret = OP_NOOP;
+if((d->duplex & OP_READ) && buffer_can_write(d->rb) && !has_written)
+{
+ret |= OP_READ;
+}
+if((d->duplex & OP_WRITE) && buffer_can_read(d->wb) && has_written)
+{
+ret |= OP_WRITE;
+}
+if(SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret))
+{
+abort();
+}
+return ret;
 }
 
 static struct copy *
@@ -799,13 +830,39 @@ copy_ptr(struct selector_key * key)
     }
     return d;
 }
+
+int
+send_to_origin(size_t command, uint8_t *ptr, struct selector_key *key, struct copy* d)
+{
+    int n;
+    log(INFO, "command:%d",command);
+    n = send(key->fd, ptr, command, MSG_NOSIGNAL);
+    has_written = true;
+    copy_compute_interests_origin(key->s, d);
+    copy_compute_interests_client(key->s, d->other);
+    return n;
+}
+
+ssize_t
+send_to_client(uint8_t *ptr, size_t  size, struct selector_key *key,struct copy* d)
+{
+    int n;
+    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    copy_compute_interests_client(key->s, d);
+    copy_compute_interests_origin(key->s, d->other);
+    return n;
+}
+
+
 void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
 copy_r(struct selector_key *key){
+
+    has_written = false;
+    struct connection *conn = ATTACHMENT(key);
     log(DEBUG, "==== COPY_R ====");
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
-
 
 
     size_t size;
@@ -818,9 +875,22 @@ copy_r(struct selector_key *key){
     n = recv(key->fd, ptr, size, 0);
     buffer_write_adv(b,n);
 
+
     if( n > 0 )
     {
-
+        if(key->fd == conn->origin_fd)
+        {
+            has_written = true;
+            log(DEBUG, "READING FROM ORIGIN");
+            copy_compute_interests_origin(key->s, d);
+            copy_compute_interests_client(key->s, d->other);
+        }
+        else if(key->fd == conn->client_fd)
+        {
+            log(DEBUG, "READING FROM CLIENT");
+            copy_compute_interests_client(key->s, d);
+            copy_compute_interests_origin(key->s, d->other);
+        }
 
     } else {
         log(ERROR, "copy_r: failed to read");
@@ -833,9 +903,6 @@ copy_r(struct selector_key *key){
         }
     }
 
-        copy_compute_interests(key->s, d);
-        copy_compute_interests(key->s, d->other);
-
         if(d->duplex == OP_NOOP) {
             ret = DONE;
         }
@@ -844,7 +911,9 @@ copy_r(struct selector_key *key){
 }
 
 static unsigned
-copy_w(struct selector_key *key){
+copy_w(struct selector_key *key)
+        {
+    log(DEBUG, "==== COPY_W ====");
     struct connection *conn = ATTACHMENT(key);
     struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct copy *d = copy_ptr(key);
@@ -857,25 +926,43 @@ copy_w(struct selector_key *key){
     unsigned ret    = COPY;
 
 
-        uint8_t *ptr = buffer_read_ptr(b, &size);
+    uint8_t *ptr = buffer_read_ptr(b, &size);
 
     if(key->fd == conn->origin_fd && size > 1)
     {
-       command = parse_command(ptr);
-       log(INFO, "command:%d",command);
-       n = send(key->fd, ptr, command, MSG_NOSIGNAL);
-    } else if(key->fd == conn->client_fd && capa_found)
+        log(DEBUG, "WRITING TO ORIGIN");
+
+           command = parse_command(ptr);
+           log(INFO, "command:%d", command);
+           has_written = true;
+           n = send_to_origin(command,ptr, key, d);
+
+    }
+    else if(key->fd == conn->origin_fd && size == 0)
     {
-        check_if_pipe_present(ptr, b);
-        capa_found = false;
-        if(!has_pipelining){
-            size += 12;
-        }
-        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+        log(DEBUG, "WRITING 0 TO ORIGIN");
+        has_written = true;
+        n = send_to_origin(size,ptr, key, d);
     }
-    else {
-        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    else if(key->fd == conn->client_fd)
+    {
+
+        log(DEBUG, "WRITING TO CLIENT");
+        has_written = false;
+        n = send_to_client(ptr,size,key,d);
+
     }
+
+//    else if(key->fd == conn->client_fd && capa_found)
+//    {
+//        check_if_pipe_present(ptr, b);
+//        capa_found = false;
+//        if(!has_pipelining){
+//            size += 12;
+//        }
+//        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+//    }
+
     if( n == -1 ) {
         ret = PERROR;
         shutdown(*d->fd, SHUT_WR);
@@ -885,13 +972,12 @@ copy_w(struct selector_key *key){
             d->other->duplex &= ~OP_READ;
         }
 
-    } else {
+    }
+    else {
         conn->has_filtered_mail = false;
         buffer_read_adv(b,n);
     }
 
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
     if(d->duplex == OP_NOOP)
     {
         ret = DONE;
