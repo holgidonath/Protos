@@ -56,8 +56,6 @@ typedef enum command_parser_states
     ARGUMENTS,
     INVALID,
     CDONE,
-
-
 } command_parser_states;
 
 char * help_message = "These are all available commmands:\n"
@@ -67,13 +65,13 @@ char * help_message = "These are all available commmands:\n"
                       "LOGOUT\t\tDisconnects admin client\n"
                       "HELP\t\tPrints this message\n";
 
-static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
+static unsigned
+parse_command(int sock, char * in_buff, char * out_buffer) {
     memset(out_buffer, 0, BUFF_SIZE);
     memset(in_buff, 0, BUFF_SIZE);
     fgets(out_buffer, BUFF_SIZE, stdin);
 //    strtok(out_buffer, "\n");
-    if (strlen(out_buffer) < 0)
-    {
+    if (strlen(out_buffer) < 0) {
         return -1;
     }
     char c = toupper(out_buffer[0]);
@@ -91,10 +89,9 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                     state = S;
                 } else if (c == 'G') {
                     state = G;
-                } else if (c == 'H'){
+                } else if (c == 'H') {
                     state = H;
-                }
-                else {
+                } else {
                     state = INVALID;
                 }
                 break;
@@ -134,8 +131,7 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                 }
                 break;
             case LOGOUT:
-                if (c == '\n') //TODO: ver si tengo que hacer para \r\n tambien o solo \n
-                {
+                if (c == '\n') { //TODO: ver si tengo que hacer para \r\n tambien o solo \n
                     state = CDONE;
                     command = LOGOUTC;
                 } else {
@@ -252,8 +248,7 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                 }
                 break;
             case GETCMD:
-                if (c == '\n')//TODO: ver lo de \r\n que puse arriba
-                {
+                if (c == '\n') { //TODO: ver lo de \r\n que puse arriba
                     state = CDONE;
                     command = GETCMDC;
                 } else {
@@ -261,28 +256,28 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                 }
                 break;
             case H:
-                if(c == 'E'){
+                if(c == 'E') {
                     state = HE;
                 } else {
                     state = INVALID;
                 }
                 break;
             case HE:
-                if(c == 'L'){
+                if(c == 'L') {
                     state = HEL;
                 } else {
                     state = INVALID;
                 }
                 break;
             case HEL:
-                if(c == 'P'){
+                if(c == 'P') {
                     state = HELP;
                 } else {
                     state = INVALID;
                 }
                 break;
             case HELP:
-                if(c == '\n'){
+                if(c == '\n') {
                     state = CDONE;
                     command = HELPC;
                 } else {
@@ -304,70 +299,55 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
     }
 
     int n;
-    if (state == INVALID)
-    {
+    if (state == INVALID) {
         printf("Invalid command!\n");
         return -1;
     } else {
         memset(out_buffer, 0, BUFF_SIZE);
         memset(in_buff, 0, BUFF_SIZE);
         sprintf(out_buffer, "%d", command);
-        if(strlen(args) > 0){
+        if(strlen(args) > 0) {
             strcat(out_buffer, args);
         }
         n = sctp_sendmsg(sock, out_buffer, strlen(out_buffer), NULL, 0,0,0,0,0,0);
-        if(n < 0){
+        if(n < 0) {
             printf("Error sending command!\n");
             return -1;
         }
         n = sctp_recvmsg(sock,in_buff, BUFF_SIZE, NULL, 0,0,0);
-        if(n < 0){
+        if(n < 0) {
             printf("Error receiving response!\n");
             return -1;
         }
 
         switch (command) {
             case GETCMDC:
-                if(in_buff[0] == '+')
-                {
+                if(in_buff[0] == '+') {
                     printf(in_buff+1);
-                }
-                else if (in_buff[0] == '-')
-                {
+                } else if (in_buff[0] == '-') {
                     printf("No command is set\n");
-                }
-                else
-                {
+                } else {
                     printf("Could not get command\n");
                 }
                 break;
             case STATSC:
-                if(in_buff[0] == '+')
-                {
+                if(in_buff[0] == '+') {
                     printf(in_buff+1);
-                }
-                else if (in_buff[0] == '-')
-                {
+                } else if (in_buff[0] == '-') {
                     printf("Failed to get stats\n");
                 }
                 break;
             case SETCMDC:
-                if(in_buff[0] == '+')
-                {
+                if(in_buff[0] == '+') {
                     printf("New filter command set to %s\n", args);
-                }
-                else if (in_buff[0] == '-')
-                {
+                } else if (in_buff[0] == '-') {
                     printf("Failed to set new filter command\n");
                 }
                 break;
             case LOGOUTC:
-                if(in_buff[0] == '+')
-                {
+                if(in_buff[0] == '+') {
                     printf("Logging out...\n");
-                }
-                else if (in_buff[0] == '-')
-                {
+                } else if (in_buff[0] == '-') {
                     printf("Failed to log out\n");
                 }
                 break;
@@ -375,16 +355,12 @@ static unsigned parse_command(int sock, char * in_buff, char * out_buffer) {
                 printf(help_message);
                 break;
         }
-
-
     }
-
     return 1;
-
 }
 
-int get_authentication(int sock,char * in_buffer,char * out_buffer)
-{
+int
+get_authentication(int sock,char * in_buffer,char * out_buffer) {
     int n;
     int nr;
     memset(in_buffer, 0, BUFF_SIZE);
@@ -401,23 +377,20 @@ int get_authentication(int sock,char * in_buffer,char * out_buffer)
         printf("ERROR\n");
         return -1;
     }
-    if (in_buffer[0] == '+')
-    {
+    if (in_buffer[0] == '+') {
         //printf(in_buffer);
         printf("Welcome Administrator!\n");
         return  1;
-    }
-    else
-    {
+    } else {
         //printf(in_buffer);
         printf("Wrong Password, Try Again\n");
         return 0;
     }
-
 }
 
 
-int main(const int argc, char **argv) {
+int
+main(const int argc, char **argv) {
 
     int status = 0;
     struct admin_opt opt;
@@ -427,35 +400,31 @@ int main(const int argc, char **argv) {
     parse_admin_options(argc, argv, &opt);
     set_mgmt_address(&addr, opt.mgmt_addr, &opt);
     int sock = socket(addr.mgmt_domain, SOCK_STREAM, IPPROTO_SCTP);
-    if(sock < 0)
-    {
+    if(sock < 0) {
         printf("Failed to create socket\n");
         close(sock);
         exit(EXIT_FAILURE);
     }
     int con = connect(sock, (struct sockaddr*)&addr.mgmt_addr, addr.mgmt_addr_len);
-    if (con < 0)
-    {
+    if (con < 0) {
         printf("Failed to connect to management\n");
         close(sock);
         exit(EXIT_FAILURE);
     }
     int n = sctp_recvmsg(sock, incoming, BUFF_SIZE, NULL, 0,0,0);
     printf(incoming);
-    if(n < 0)
-    {
+    if(n < 0) {
         printf("Error getting greeting\n");
         close(sock);
         exit(EXIT_FAILURE);
     }
     printf("Please enter Password to enter.\nPassword: \n");
-    while(!status)
-    {
+    while(!status) {
         status = get_authentication(sock,incoming, out);
 
     }
     printf(help_message);
-    while(1){
+    while(1) {
         parse_command(sock, incoming, out);
     }
     return 0;

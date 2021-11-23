@@ -5,9 +5,10 @@
 
 #include "include/util.h"
 
-void *safe_malloc(size_t bytes) {
+void *
+safe_malloc(size_t bytes) {
     void *p;
-    if ( (p = malloc(bytes)) == NULL ){
+    if ( (p = malloc(bytes)) == NULL ) {
         fprintf(stderr, "malloc can't allocate %lu bytes\n", (unsigned long)bytes);
         exit(EXIT_FAILURE);
     }

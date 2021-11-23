@@ -34,8 +34,8 @@ handle_first(struct state_machine *stm, struct selector_key *key) {
     }
 }
 
-inline static
-void jump(struct state_machine *stm, unsigned next, struct selector_key *key) {
+inline static void
+jump(struct state_machine *stm, unsigned next, struct selector_key *key) {
     if(next > stm->max_state) {
         abort();
     }

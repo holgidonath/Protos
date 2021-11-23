@@ -94,7 +94,6 @@ sock_blocking_copy(const int source, const int dest) {
         } while (nread > 0);
     }
     error:
-
+    
     return ret;
 }
-

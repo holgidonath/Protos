@@ -166,8 +166,3 @@ parse_options(int argc, char **argv, struct opt * opt) {
     }
     opt->origin_server = argv[optind];
 }
-
-
-
-
-
