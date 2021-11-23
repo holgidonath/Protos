@@ -884,7 +884,10 @@ copy_r(struct selector_key *key){
             log(DEBUG, "READING FROM ORIGIN:%s", ptr);
             if(should_parse_retr){
                 log(INFO, "parse retr");
-                socket_forwarding_cmd(key,opt.cmd);
+                if (opt.cmd)
+                {
+                    socket_forwarding_cmd(key,opt.cmd);
+                }
                 should_parse_retr = 0;
             }else{
                 log(INFO, "dont parse retr");
