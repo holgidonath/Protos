@@ -604,39 +604,87 @@ sigterm_handler(const int signal) {
 
 //------------------------------------------------------------------------------------------
 
+int ipversion_check(char * address) {
+    struct in6_addr bindaddr;
+
+    if (inet_pton(AF_INET, address, &bindaddr) == 1) {
+        return AF_INET;
+    } else {
+        if (inet_pton(AF_INET6, address, &bindaddr) == 1) {
+            return AF_INET6;
+        }
+    }
+    log(ERROR, "ipversion_check: couldnt resolve ip version for address: %s", address);
+    return 0;
+}
 
 
 int
-create_proxy_socket(struct sockaddr_in addr, struct opt opt)
-{
-
+create_socketv4(struct sockaddr_in addr, struct opt opt) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = opt.pop3_addr != NULL ? opt.pop3_addr : htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.local_port);
 
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-       perror("unable to create proxy socket");
+    const int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(sock < 0) {
+        perror("unable to create proxy socket");
         return -1;
     }
 
     fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
 
     // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        perror("unable to bind proxy socket");
+    if(bind(sock, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("create_socketv4: unable to bind proxy socket");
         return -1;
     }
 
-    if (listen(server, 20) < 0) {
+    if (listen(sock, 20) < 0) {
+        perror("create_socketv4: unable to listen in proxy socket");
+        return -1;
+    }
+
+    return sock;
+}
+
+int create_socketv6(struct sockaddr_in6 addr, struct opt opt) {
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family         = AF_INET6;
+    addr.sin6_port           = htons(opt.local_port);
+
+    if(opt.pop3_addr != NULL) {
+        inet_pton(AF_INET6, opt.pop3_addr, &addr.sin6_addr);
+
+    } else {
+        addr.sin6_addr = in6addr_any;
+    }
+
+    const int sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if(sock < 0) {
+        perror("create_socketv6: unable to create proxy socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &(int){ 1 }, sizeof(int));
+
+    if(bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6)) < 0) {
+        perror("create_socketv6: unable to bind proxy socket");
+        return -1;
+    }
+
+    if (listen(sock, 20) < 0) {
         perror("unable to listen in proxy socket");
         return -1;
     }
 
-    return server;
+    return sock;
 }
 
 int
@@ -645,7 +693,7 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = opt.mgmt_addr != NULL ? opt.mgmt_addr : htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.mgmt_port);
 
     const int admin = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
@@ -665,6 +713,52 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     initmsg.sinit_max_attempts = 4;
 
     setsockopt(admin, IPPROTO_SCTP,SCTP_INITMSG, &initmsg, sizeof(initmsg));
+
+    if(bind(admin, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind management socket");
+        return -1;
+    }
+
+    if (listen(admin, 20) < 0) {
+        perror("unable to listen in management socket");
+        return -1;
+    }
+
+    return admin;
+}
+
+int
+create_management_socket6(struct sockaddr_in6  addr, struct opt opt)
+{
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family      = AF_INET6;
+    addr.sin6_port        = htons(opt.mgmt_port);
+
+    if(opt.mgmt_addr != NULL) {
+        inet_pton(AF_INET6, opt.mgmt_addr, &addr.sin6_addr);
+
+    } else {
+        addr.sin6_addr = in6addr_any;
+    }
+
+    const int admin = socket(AF_INET6, SOCK_STREAM, IPPROTO_SCTP);
+    if(admin < 0) {
+        perror("unable to create management socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on SCTP port %d\n", opt.mgmt_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+
+    struct sctp_initmsg initmsg;
+    memset (&initmsg, 0, sizeof (initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    setsockopt(admin, IPPROTO_SCTP,SCTP_INITMSG, &initmsg, sizeof(initmsg));
+    setsockopt(admin, SOL_IPV6, IPV6_V6ONLY, &(int){ 1 }, sizeof(int));
 
     if(bind(admin, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
         perror("unable to bind management socket");
@@ -1678,14 +1772,14 @@ main(const int argc, char **argv) {
     appname = *argv;
     parse_options(argc, argv, &opt);
     /* print options just for debug */
-    log(INFO,"fstderr       = %s\n", opt.fstderr);
-    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
-    log(INFO,"origin_port   = %d\n", opt.origin_port);
-    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
-    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
-    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
-    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
-    log(INFO,"cmd           = %s\n", opt.cmd);
+//    log(INFO,"fstderr       = %s\n", opt.fstderr);
+//    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
+//    log(INFO,"origin_port   = %d\n", opt.origin_port);
+//    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
+//    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
+//    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
+//    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
+//    log(INFO,"cmd           = %s\n", opt.cmd);
 
     close(0);
 
@@ -1693,18 +1787,48 @@ main(const int argc, char **argv) {
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
-    struct sockaddr_in addr;
-    struct sockaddr_in mngmt_addr;
+    struct sockaddr_in  addr;
+    struct sockaddr_in6 addr6;
+    struct sockaddr_in  mngmt_addr;
+    struct sockaddr_in6 mngmt_addr6;
     socklen_t admin_addr_length;
+    socklen_t addr6len = sizeof(addr6);
 
     metrics = init_metrics();
 
     should_parse = 0;
     should_parse_retr = 0;
-    int proxy_fd = create_proxy_socket(addr, opt);
-    int admin_fd = create_management_socket(mngmt_addr, opt);
+    int proxy_fd, proxy6_fd;
+    int admin_fd, admin6_fd;
 
-    if(proxy_fd == -1 || admin_fd == -1)
+    proxy_fd = proxy6_fd = -1;
+    admin_fd = admin6_fd = -1;
+
+    int ip_version = opt.pop3_addr != NULL ? ipversion_check(opt.pop3_addr) : NULL;
+    if(ip_version == AF_INET) {
+        proxy_fd = create_socketv4(addr, opt);
+
+    } else if (ip_version == AF_INET6) {
+        proxy6_fd = create_socketv6(addr6, opt);
+
+    } else {
+        proxy_fd = create_socketv4(addr, opt);
+        proxy6_fd = create_socketv6(addr6, opt);
+    }
+
+    ip_version = opt.mgmt_addr != NULL ? ipversion_check(opt.mgmt_addr) : NULL;
+    if(ip_version == AF_INET) {
+        admin_fd = create_management_socket(mngmt_addr, opt);
+
+    } else if (ip_version == AF_INET6) {
+        admin6_fd = create_management_socket6(mngmt_addr6, opt);
+
+    } else {
+        admin_fd = create_management_socket(mngmt_addr, opt);
+        admin6_fd = create_management_socket6(mngmt_addr6, opt);
+    }
+
+    if(proxy_fd == -1 || admin_fd == -1 || proxy6_fd == -1 || admin6_fd == -1)
     {
         goto finally;
     }
@@ -1720,6 +1844,14 @@ main(const int argc, char **argv) {
         goto finally;
     }
     if(selector_fd_set_nio(admin_fd) == -1) {
+        err_msg = "getting admin socket flags";
+        goto finally;
+    }
+    if(selector_fd_set_nio(proxy6_fd) == -1) {
+        err_msg = "getting server socket flags";
+        goto finally;
+    }
+    if(selector_fd_set_nio(admin6_fd) == -1) {
         err_msg = "getting admin socket flags";
         goto finally;
     }
@@ -1758,11 +1890,29 @@ main(const int argc, char **argv) {
         err_msg = "registering fd";
         goto finally;
     }
+
+    if(proxy6_fd != -1) {
+        ss = selector_register(selector, proxy6_fd, &passive_accept_handler,
+                               OP_READ, NULL);
+        if(ss != SELECTOR_SUCCESS) {
+            err_msg = "registering fd";
+            goto finally;
+        }
+    }
     ss = selector_register(selector, admin_fd, &passive_admin_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering admin_fd";
         goto finally;
+    }
+
+    if(admin6_fd != -1) {
+        ss = selector_register(selector, admin6_fd, &passive_admin_handler,
+                               OP_READ, NULL);
+        if(ss != SELECTOR_SUCCESS) {
+            err_msg = "registering admin_fd";
+            goto finally;
+        }
     }
     for(;!done;) {
         err_msg = NULL;
@@ -1801,6 +1951,12 @@ finally:
     }
     if(admin_fd >= 0) {
         close(admin_fd);
+    }
+    if(proxy6_fd >= 0) {
+        close(proxy6_fd);
+    }
+    if(admin6_fd >= 0) {
+        close(admin6_fd);
     }
     return ret;
 }
