@@ -414,7 +414,7 @@ static unsigned connection_ready(struct selector_key  *key){
                 selector_set_interest(key->s, key->fd, OP_NOOP);
                 return origin_connect(key);
             } else {
-                log(INFO, "origin sever connection success.");
+                log(INFO, "Origin sever connection success.");
                 ATTACHMENT(key)->references += 1;
                 freeaddrinfo(con->origin_resolution);
                 con->origin_resolution = 0;
@@ -429,7 +429,7 @@ static unsigned connection_ready(struct selector_key  *key){
             if (error != 0) {
                 log(ERROR, "failed to connect to ORIGIN");
             } else {
-                log(INFO, "origin sever connection success.");
+                log(INFO, "Origin sever connection success.");
                 ATTACHMENT(key)->references += 1;
                 return COPY;
             }
@@ -511,7 +511,7 @@ static unsigned origin_connect(struct selector_key * key) {
 
     error:
     stm_next_status = PERROR;
-    log(ERROR, "origin server connection.");
+    log(ERROR, "Origin server connection error.");
     if (con->origin_fd != -1) {
         close(con->origin_fd);
     }
@@ -645,7 +645,7 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = opt.mgmt_addr != NULL ? opt.mgmt_addr : htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.mgmt_port);
 
     const int admin = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
@@ -914,7 +914,7 @@ int
 send_to_origin(size_t command, uint8_t *ptr, struct selector_key *key, struct copy* d)
 {
     int n;
-    log(INFO, "command:%d",command);
+//    log(INFO, "command:%d",command);
     n = send(key->fd, ptr, command, MSG_NOSIGNAL);
     has_written = true;
     copy_compute_interests_origin(key->s, d);
@@ -941,7 +941,7 @@ copy_r(struct selector_key *key)
     has_written = false;
     struct extern_cmd *filtro = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct connection *conn = ATTACHMENT(key);
-    log(DEBUG, "==== COPY_R ====");
+//    log(DEBUG, "==== COPY_R ====");
     struct copy *d = copy_ptr(key);
 //    assert(*d->fd == key->fd);
 
@@ -960,13 +960,13 @@ copy_r(struct selector_key *key)
 
         if(n > 0)
         {
-            log(INFO, "leyendo del filtro");
+//            log(INFO, "leyendo del filtro");
             filter_active = false;
             buffer_write_adv(b,n);
 //            selector_set_interest(key->s, filtro->pipe_out[0], OP_NOOP);
 //            selector_set_interest(key->s, conn->client_fd, OP_WRITE);
         } else {
-            log(FATAL, "NO LEI NADA");
+            log(FATAL, "Failed reading from filter.");
         }
 
         return COPY;
@@ -1017,7 +1017,7 @@ copy_r(struct selector_key *key)
 static unsigned
 copy_w(struct selector_key *key)
 {
-    log(DEBUG, "==== COPY_W ====");
+//    log(DEBUG, "==== COPY_W ====");
     struct connection *conn = ATTACHMENT(key);
     struct extern_cmd *filtro = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct copy *d = copy_ptr(key);
@@ -1038,7 +1038,7 @@ copy_w(struct selector_key *key)
         log(DEBUG, "WRITING TO ORIGIN");
 
            command = parse_command(ptr);
-           log(INFO, "command:%d", command);
+//           log(INFO, "command:%d", command);
            has_written = true;
            n = send_to_origin(command,ptr, key, d);
 
@@ -1069,18 +1069,18 @@ copy_w(struct selector_key *key)
             log(DEBUG, "WRITING TO filter");
             filter(key);
             n = write(filtro->pipe_in[1], ptr, size);
-            log(INFO, "escribiendo al filto %d",n)
+//            log(INFO, "escribiendo al filto %d",n)
 
-//            buffer_read_adv(b,n);
+            buffer_read_adv(b,n);
 //            selector_set_interest(key->s, filtro->pipe_out[0], OP_READ);
             filter_active = true;
             retr_found = false;
-            ret =  COPY;
+            return COPY;
 
         }
         else if(opt.cmd != NULL && filter_active == true)
         {
-            b = &conn->filter_buffer;
+            b = &conn->read_buffer;
             ptr = buffer_write_ptr(b, &size);
             n = read(filtro->pipe_out[0], ptr, size);
 
@@ -1088,7 +1088,7 @@ copy_w(struct selector_key *key)
             buffer_write_adv(b, n);
             ptr = buffer_read_ptr(b,&size);
             n = send(key->fd, ptr, size,MSG_NOSIGNAL);
-            buffer_read_adv(b, n);
+//            buffer_read_adv(b, n);
             if(n > 0){
                 filter_active = false;
             }
@@ -1149,7 +1149,7 @@ int parse_command(char * ptr)
     char args_buff[2048] = {0};
     char c = toupper(ptr[0]);
     while(state != DONEPARSING) {
-        log(INFO, "%c", c);
+//        log(INFO, "%c", c);
         switch (state) {
             case BEGIN:
                 if(c == 'R'){
@@ -1193,7 +1193,7 @@ int parse_command(char * ptr)
             case USE:
                 if (c == 'R') {
                     parse_user(user_buffer, ptr);
-                    log(INFO, "el usuario es %s", user_buffer);
+//                    log(INFO, "el usuario es %s", user_buffer);
                     state = USER;
 
                 } else if(c == '\r')
@@ -1351,7 +1351,7 @@ int parse_command(char * ptr)
 
             case CONTRABARRAR:
                 if (c == '\n') {
-                    log(INFO, "new line found");
+//                    log(INFO, "new line found");
                     state = DONEPARSING;
                 }
 //                else {
@@ -1362,7 +1362,7 @@ int parse_command(char * ptr)
             case GOTORN:
                 while(c != '\r' && c != '\n')
                 {
-                    log(INFO,"%c",c);
+//                    log(INFO,"%c",c);
                     i++;
                     c = toupper(ptr[i]);
                 }
