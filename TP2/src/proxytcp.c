@@ -604,39 +604,87 @@ sigterm_handler(const int signal) {
 
 //------------------------------------------------------------------------------------------
 
+int ipversion_check(char * address) {
+    struct in6_addr bindaddr;
+
+    if (inet_pton(AF_INET, address, &bindaddr) == 1) {
+        return AF_INET;
+    } else {
+        if (inet_pton(AF_INET6, address, &bindaddr) == 1) {
+            return AF_INET6;
+        }
+    }
+    log(ERROR, "ipversion_check: couldnt resolve ip version for address: %s", address);
+    return 0;
+}
 
 
 int
-create_proxy_socket(struct sockaddr_in addr, struct opt opt)
-{
-
+create_socketv4(struct sockaddr_in addr, struct opt opt) {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = opt.pop3_addr != NULL ? opt.pop3_addr : htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.local_port);
 
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(server < 0) {
-       perror("unable to create proxy socket");
+    const int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(sock < 0) {
+        perror("unable to create proxy socket");
         return -1;
     }
 
     fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
 
     // man 7 ip. no importa reportar nada si falla.
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
-    if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        perror("unable to bind proxy socket");
+    if(bind(sock, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("create_socketv4: unable to bind proxy socket");
         return -1;
     }
 
-    if (listen(server, 20) < 0) {
+    if (listen(sock, 20) < 0) {
+        perror("create_socketv4: unable to listen in proxy socket");
+        return -1;
+    }
+
+    return sock;
+}
+
+int create_socketv6(struct sockaddr_in6 addr, struct opt opt) {
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family         = AF_INET6;
+    addr.sin6_port           = htons(opt.local_port);
+
+    if(opt.pop3_addr != NULL) {
+        sprintf(addr.sin6_addr.s6_addr, "%s", opt.pop3_addr);
+
+    } else {
+        addr.sin6_addr = in6addr_any;
+    }
+
+    const int sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
+    if(sock < 0) {
+        perror("create_socketv6: unable to create proxy socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on TCP port %d\n", opt.local_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
+    setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &(int){ 1 }, sizeof(int));
+
+    if(bind(sock, (struct sockaddr_in6*) &addr, sizeof(struct sockaddr_in6)) < 0) {
+        perror("create_socketv6: unable to bind proxy socket");
+        return -1;
+    }
+
+    if (listen(sock, 20) < 0) {
         perror("unable to listen in proxy socket");
         return -1;
     }
 
-    return server;
+    return sock;
 }
 
 int
@@ -1693,18 +1741,33 @@ main(const int argc, char **argv) {
     selector_status   ss      = SELECTOR_SUCCESS;
     fd_selector selector      = NULL;
 
-    struct sockaddr_in addr;
-    struct sockaddr_in mngmt_addr;
+    struct sockaddr_in  addr;
+    struct sockaddr_in6 addr6;
+    struct sockaddr_in  mngmt_addr;
+    struct sockaddr_in6 mngmt_serveraddr6;
     socklen_t admin_addr_length;
+    socklen_t addr6len = sizeof(addr6);
 
     metrics = init_metrics();
 
     should_parse = 0;
     should_parse_retr = 0;
-    int proxy_fd = create_proxy_socket(addr, opt);
+    int proxy_fd, proxy6_fd;
     int admin_fd = create_management_socket(mngmt_addr, opt);
 
-    if(proxy_fd == -1 || admin_fd == -1)
+    int ip_version = opt.pop3_addr != NULL ? ipversion_check(opt.pop3_addr) : NULL;
+    if(ip_version == AF_INET) {
+        proxy_fd = create_socketv4(addr, opt);
+
+    } else if (ip_version == AF_INET6) {
+        proxy6_fd = create_socketv6(addr6, opt);
+
+    } else {
+        proxy_fd = create_socketv4(addr, opt);
+        proxy6_fd = create_socketv6(addr6, opt);
+    }
+
+    if(proxy_fd == -1 || admin_fd == -1 || proxy6_fd == -1)
     {
         goto finally;
     }
