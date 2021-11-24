@@ -7,9 +7,16 @@
 
 #define READ 0
 #define WRITE 1
+#define CHILD_BUFFER_SIZE 2048
 
-void env_var_init(char *username);
-void worker_secondary(struct selector_key *key);
+/* ==================================================== */
+/*                     PROTOTYPES                       */
+/* ==================================================== */
+void
+env_var_init(char *username);
+
+void
+filter_destroy(struct selector_key *key);
 
 /**
  * Posibles estados del filtro.

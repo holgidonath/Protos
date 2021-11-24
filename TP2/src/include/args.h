@@ -25,9 +25,7 @@ struct opt {
 
 
 /* Environment variables */
-static char env_pop3filter_version[15];
-static char env_pop3_server[135];
-static char env_pop3_username[25];
+char envvar_buffer[256];
 
 #endif
 

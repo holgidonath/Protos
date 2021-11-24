@@ -150,12 +150,6 @@ static const struct state_definition client_statbl[] =
 
     },
     {
-        .state            = FILTER,
-//        .on_arrival       = filter_init,
-//        .on_read_ready    = filter_recv,
-//        .on_write_ready   = filter_send,
-    },
-    {
         .state = COPY,
         .on_arrival = copy_init,
         .on_read_ready = copy_r,
@@ -1621,158 +1615,104 @@ char * parse_user(char * ptr){
 //-----------------------------------------------------------------------------------------------------------------
 //                                      EXTERN COMMAND
 //-----------------------------------------------------------------------------------------------------------------
-//static void
-//filter_init(const unsigned state, struct selector_key *key) {
-//    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-//
-//    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
-//    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
-//}
-//
-//static unsigned
-//filter_send(struct selector_key *key) {
-//    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-//    enum proxy_states ret;
-//
-//    size_t   count;
-//    ssize_t  n;
-//    buffer  *b = d->mail_buffer;
-//    uint8_t *ptr;
-//
-//    ptr = buffer_read_ptr(b, &count);
-//    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], ptr, count);
-//    if (n == 0) {
-//        selector_status ss = SELECTOR_SUCCESS;
-//        ss |= selector_set_interest_key(key, OP_NOOP);
-//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-//        ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
-//
-//    } if(n == -1) {
-//        log(ERROR, "filter_send: writing to file descriptor failed")
-//        ret = ERROR;
-//
-//    } else {
-//        selector_status ss = SELECTOR_SUCCESS;
-//        if (ATTACHMENT(key)->read_all_mail){
-//            close(ATTACHMENT(key)->w_to_filter_fds[WRITE]);
-//            selector_unregister_fd(key->s, ATTACHMENT(key)->w_to_filter_fds[WRITE]);
-//            buffer_reset(b);
-//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->r_from_filter_fds[READ], OP_READ);
-//            ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
-//        } else {
-//            buffer_reset(b);
-//            ss |= selector_set_interest_key(key, OP_NOOP);
-//            ss |= selector_set_interest(key->s, ATTACHMENT(key)->origin_fd, OP_READ);
-//            ret = SELECTOR_SUCCESS == ss ? COPY : PERROR;
-//        }
-//    }
-//
-//    return ret;
-//}
-//bool
-//ending_crlf_dot_crlf(buffer *b) {
-//
-//    return *(b->write-1) == '\n' &&
-//           *(b->write-2) == '\r' &&
-//           *(b->write-3) == '.'  &&
-//           *(b->write-4) == '\n' &&
-//           *(b->write-5) == '\r';
-//}
-//
-//bool
-//is_err_response(buffer* buff){
-//
-//    return *buff->read     == '-' &&
-//           *(buff->read+1) == 'E' &&
-//           *(buff->read+2) == 'R' &&
-//           *(buff->read+3) == 'R';
-//}
-//static unsigned
-//filter_recv(struct selector_key *key) {
-//    struct extern_cmd *d = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-//    enum proxy_states ret = FILTER;
-//    size_t  count;
-//    ssize_t  n;
-//    uint8_t *ptr;
-//
-//    buffer  *b = d->filtered_mail_buffer;
-//    buffer_reset(b);
-//    ptr = buffer_write_ptr(b, &count);
-//    n = read(ATTACHMENT(key)->r_from_filter_fds[READ], ptr, count);
-//    if(n > 0) {
-//        buffer_write_adv(b, n);
-//        // chequeo si se leyo el final del mail (CRLF . CRLF)
-//        ATTACHMENT(key)->read_all_mail = ending_crlf_dot_crlf(b);
-//        if (ATTACHMENT(key)->read_all_mail){
-//            close(ATTACHMENT(key)->r_from_filter_fds[READ]);
-//            selector_unregister_fd(key->s, ATTACHMENT(key)->r_from_filter_fds[READ]);
-//        }
-//        ATTACHMENT(key)->has_filtered_mail = true;
-//        selector_status ss = SELECTOR_SUCCESS;
-//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_WRITE);
-//        ret = ss == SELECTOR_SUCCESS ? COPY : PERROR;
-//
-//    }
-//    else if (n == 0) {
-//        selector_status ss = SELECTOR_SUCCESS;
-//        ss |= selector_set_interest_key(key, OP_NOOP);
-//        ss |= selector_set_interest(key->s, ATTACHMENT(key)->client_fd, OP_READ);
-//        ret = ss == SELECTOR_SUCCESS ? FILTER : PERROR;
-//
-//    }
-//    else {
-//        log(ERROR, "filter_recv: reading from file descriptor failed")
-//        ret = ERROR;
-//    }
-//
-//    return ret;
-//}
 
-/* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
 static void
-socket_forwarding_cmd (struct selector_key * key, char *cmd) {
-    int n;
-    // pipe_in (w_to_filter_fds ): father --> child
-    // pipe_out (r_from_filter_fds): child  --> father
-    struct connection * conn = ATTACHMENT(key);
-    struct extern_cmd * filter = (struct extern_cmd *) &conn->extern_cmd;
-    int *pipe_in = filter->pipe_in;
-    int *pipe_out = filter->pipe_out;
+filter_init (struct selector_key * key, char *cmd) {
+    log(DEBUG, "==== FILTER_INIT ====");
 
-    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
-        log(FATAL, "socket_forwarding_cmd: Cannot create pipe");
+    int n;
+    struct connection * conn = ATTACHMENT(key);
+    struct data_filter * filter =  &conn->data_filter;
+
+    // filter_in : father --> child
+    int *filter_in = filter->fdin;
+
+    // filter_out: child  --> father
+    int *filter_out = filter->fiout;
+
+    // initialize fds just in case
+    for(int i = 0; i < 2; i++) {
+        filter_in[i]  = -1;
+        filter_out[i] = -1;
+    }
+
+    // flush filter buffer
+    buffer_reses(conn->flter_buffer);
+
+    // create filter input and output pipes
+    if (pipe(filter_in) < 0 || pipe(filter_out) < 0) {
+        log(FATAL, "filter_init: Cannot create pipe");
         exit(EXIT_FAILURE);
     }
 
+    // forking to attend process
     pid_t pid = fork();
     if( pid == 0 ) {
-        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> pipe_in[READ]
-        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
+        filter->pid_child = -1;
+        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> filter_in[READ]
+        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> filter_out[WRITE]
         close(pipe_in[WRITE]);
         close(pipe_out[READ]);
-//        env_var_init(username); // TODO global username
+
+        // setting custom sderr
+        int fderr = open(opt->fstderr, O_WRONLY | O_APPEND);
+        if(fderr > 0) {
+            log(INFO, "New stderr log filepath: %s", opt->fstderr)
+            dup2(fderr, STDERR_FILENO);
+
+        } else {
+            log(ERROR, "filter_init: Couldn't open %s", opt->fstderr);
+            log(INFO, "filter stderr filepath stays at: /dev/null");
+        }
+        // setting environment variable for child process
+        env_var_init(username);
+
+        // executing command
         system(cmd);
-        worker_secondary(&key); // escribe output del proceso en STDOUT
+        // read all stdin and write it stdout
+        readin_writeout();
+
+        // change filter state
+        filter->state = FILTER_ENDING;
+        filter_destroy(key);
+
     } else {
-        close(pipe_in[READ]);
-        close(pipe_out[WRITE]);
+        filter->pid_child = pid;
+
+        close(filter_in[READ]);
+        filter->fdin[READ]   = -1;
+        close(filter_out[WRITE]);
+        filter->fdout[WRITE] = -1;
 
         selector_status ss = SELECTOR_SUCCESS;
         ss |= selector_register(key->s,
-                                pipe_in[WRITE],
+                                filter_in[WRITE],
                                 &proxy_handler,
                                 OP_NOOP,
-                                key->data);
+                                conn);
 
         ss |= selector_register(key->s,
-                                pipe_out[READ],
+                                filter_out[READ],
                                 &proxy_handler,
                                 OP_NOOP,
-                                key->data);
+                                conn);
 
         selector_fd_set_nio(pipe_in[WRITE]);
         selector_fd_set_nio(pipe_out[READ]);
     }
+}
+
+static void
+readin_writeout() {
+    ssize_t n;
+    uint8_t dataBuffer[CHILD_BUFFER_SIZE];
+
+    do {
+        n = read(STDIN_FILENO, dataBuffer, sizeof(dataBuffer));
+        if( n > 0 ) {
+            write(STDOUT_FILENO, dataBuffer, n);
+        }
+    } while( n > 0 );
 }
 
 //-----------------------------------------------------------------------------------------------------------------

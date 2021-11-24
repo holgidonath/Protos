@@ -17,30 +17,25 @@ read_from_filter(struct selector_key *key);
 void
 env_var_init(char *username);
 
-static void
-filter_destroy(struct selector_key *key);
 /* ==================================================== */
 /*                   IMPLEMENTATION                     */
 /* ==================================================== */
 void
-env_var_init(char *username) {
-    char env_pop3filter_version[30];
-    char env_pop3_server[150];
-    char env_pop3_username[30];
+env_var_init(char *username) { // envvar_buffer es global definido en args.h
     struct opt * opt = get_opt();
-    sprintf(env_pop3filter_version, "POP3FILTER_VERSION=%s", VERSION);
-    if(putenv(env_pop3filter_version)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", env_pop3filter_version);
+    sprintf(envvar_buffer, "POP3FILTER_VERSION=%s", VERSION);
+    if(putenv(envvar_buffer)) {
+        log(ERROR, "env_var_init: couldn't create 'POP3FILTER_VERSION=%s' environment variable", VERSION);
     }
 
-    sprintf(env_pop3_server, "POP3_SERVER=%s", opt->origin_server);
-    if(putenv(env_pop3_server)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
+    sprintf(envvar_buffer, "POP3_SERVER=%s", opt->origin_server);
+    if(putenv(envvar_buffer)) {
+        log(ERROR, "env_var_init: couldn't create 'POP3_SERVER=%s' environment variable", opt->origin_server);
     }
 
-    sprintf(env_pop3_server, "POP3_USERNAME=%s", username);
-    if(putenv(env_pop3_username)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", username);
+    sprintf(envvar_buffer, "POP3_USERNAME=%s", username);
+    if(putenv(envvar_buffer)) {
+        log(ERROR, "env_var_init: couldn't create 'POP3_USERNAME=%s' environment variable", username);
     }
 }
 
@@ -111,7 +106,7 @@ write_buffer_to_filter(struct selector_key *key, buffer* buff) {
     return n;
 }
 
-static void
+void
 filter_destroy(struct selector_key *key) {
     struct connnection *  conn    = ATTACHMENT(key);
     struct data_filter * data_filter   = &conn->data_filter;
