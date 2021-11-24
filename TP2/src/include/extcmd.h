@@ -4,6 +4,8 @@
 #include "buffer.h"
 #include <stdbool.h>
 #include "selector.h"
+#include <signal.h>
+#include <fcntl.h>
 
 #define READ 0
 #define WRITE 1
@@ -33,7 +35,7 @@ typedef struct data_filter {
     int                     fdin[2];
     int                     fdout[2];
     filter_status           state;
-    pid_t                   pid_child
-}; data_filter
+    pid_t                   pid_child;
+} data_filter;
 
 #endif //PROTOS_EXTCMD_H

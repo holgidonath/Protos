@@ -87,7 +87,7 @@ struct connection
 
     struct copy             copy_client;
     struct copy             copy_origin;
-    struct copy             copy_filter
+    struct copy             copy_filter;
 
     struct address_data     origin_data;
 

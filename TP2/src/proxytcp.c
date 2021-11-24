@@ -128,12 +128,15 @@ static struct copy *
 get_copy_ptr(struct selector_key *key);
 
 static void
-socket_forwarding_cmd (struct selector_key * key, char *cmd);
+filter_init (struct selector_key * key, char *cmd);
 
 static void
-extern_cmd_finish(struct selector_key *key);
+readin_writeout();
 
-int parse_command(char * ptr);
+static int
+read_from_filter(struct selector_key *key);
+
+        int parse_command(char * ptr);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
@@ -374,10 +377,6 @@ new_connection(int client_fd)
 
         con->references = 1;
         con->was_greeted = false;
-        con->was_retr = false;
-        con->has_filtered_mail = false;
-        con->read_all_mail = false;
-        con->filtered_all_mail = false;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
@@ -847,7 +846,7 @@ filter_compute_interest(fd_selector s, struct copy * copy, struct data_filter * 
         retRead = READ;
     }
 
-    if(SELECTOR_SUCCESS != selector_set_interest(s, data_filter->fdout[READ], retRead) {
+    if(SELECTOR_SUCCESS != selector_set_interest(s, data_filter->fdout[READ], retRead)) {
         log(FATAL, "Problem trying to set interest: %d, to selector in filter, out pipe.", retRead);
         abort();
     }
@@ -926,10 +925,10 @@ copy_r(struct selector_key *key){
                 log(INFO, "parse retr");
                 if (opt.cmd)
                 {
-                    socket_forwarding_cmd(key,opt.cmd);
-                    buffer_reset(b);
-                    n = recv(conn->extern_cmd.pipe_out[WRITE], ptr, size, 0);
-                    buffer_write_adv(b,n);
+//                    socket_forwarding_cmd(key,opt.cmd);
+//                    buffer_reset(b);
+//                    n = recv(conn->extern_cmd.pipe_out[WRITE], ptr, size, 0);
+//                    buffer_write_adv(b,n);
                 }
                 should_parse_retr = 0;
                 //ret = FILTER;
@@ -973,7 +972,7 @@ copy_w(struct selector_key *key)
 {
     log(DEBUG, "==== COPY_W ====");
     struct connection *conn = ATTACHMENT(key);
-    struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+    struct data_filter *filter = &conn->data_filter;
     struct copy *d = copy_ptr(key);
     assert(*d->fd == key->fd);
     int command = 0;
@@ -1041,7 +1040,6 @@ copy_w(struct selector_key *key)
         ret = DONE;
     }
     else {
-        conn->has_filtered_mail = false;
         buffer_read_adv(b,n);
     }
 
@@ -1055,17 +1053,9 @@ copy_w(struct selector_key *key)
 
 
 static void
-extern_cmd_finish(struct selector_key *key)
-{
+filter_finish(struct selector_key *key) {
     struct connection *conn = ATTACHMENT(key);
-
-    close(conn->r_from_filter_fds[READ]);
-    selector_unregister_fd(key->s, conn->w_to_filter_fds[WRITE]);
-    selector_unregister_fd(key->s, conn->r_from_filter_fds[READ]);
-    conn->w_to_filter_fds[READ]     = -1;
-    conn->w_to_filter_fds[WRITE]    = -1;
-    conn->r_from_filter_fds[READ]   = -1;
-    conn->r_from_filter_fds[WRITE]  = -1;
+    // TODO
 }
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
@@ -1628,7 +1618,7 @@ filter_init (struct selector_key * key, char *cmd) {
     int *filter_in = filter->fdin;
 
     // filter_out: child  --> father
-    int *filter_out = filter->fiout;
+    int *filter_out = filter->fdout;
 
     // initialize fds just in case
     for(int i = 0; i < 2; i++) {
@@ -1637,7 +1627,7 @@ filter_init (struct selector_key * key, char *cmd) {
     }
 
     // flush filter buffer
-    buffer_reses(conn->flter_buffer);
+    buffer_reset(&conn->filter_buffer);
 
     // create filter input and output pipes
     if (pipe(filter_in) < 0 || pipe(filter_out) < 0) {
@@ -1649,23 +1639,23 @@ filter_init (struct selector_key * key, char *cmd) {
     pid_t pid = fork();
     if( pid == 0 ) {
         filter->pid_child = -1;
-        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> filter_in[READ]
-        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> filter_out[WRITE]
-        close(pipe_in[WRITE]);
-        close(pipe_out[READ]);
+        dup2(filter_in[READ], STDIN_FILENO); // stdin --> filter_in[READ]
+        dup2(filter_out[WRITE], STDOUT_FILENO); // stdout --> filter_out[WRITE]
+        close(filter_in[WRITE]);
+        close(filter_out[READ]);
 
         // setting custom sderr
-        int fderr = open(opt->fstderr, O_WRONLY | O_APPEND);
+        int fderr = open(opt.fstderr, O_WRONLY | O_APPEND);
         if(fderr > 0) {
-            log(INFO, "New stderr log filepath: %s", opt->fstderr)
+            log(INFO, "New stderr log filepath: %s", opt.fstderr)
             dup2(fderr, STDERR_FILENO);
 
         } else {
-            log(ERROR, "filter_init: Couldn't open %s", opt->fstderr);
+            log(ERROR, "filter_init: Couldn't open %s", opt.fstderr);
             log(INFO, "filter stderr filepath stays at: /dev/null");
         }
         // setting environment variable for child process
-        env_var_init(username);
+        env_var_init("DUMMY"); // TODO add username
 
         // executing command
         system(cmd);
@@ -1697,8 +1687,8 @@ filter_init (struct selector_key * key, char *cmd) {
                                 OP_NOOP,
                                 conn);
 
-        selector_fd_set_nio(pipe_in[WRITE]);
-        selector_fd_set_nio(pipe_out[READ]);
+        selector_fd_set_nio(filter_in[WRITE]);
+        selector_fd_set_nio(filter_out[READ]);
     }
 }
 
@@ -1713,6 +1703,43 @@ readin_writeout() {
             write(STDOUT_FILENO, dataBuffer, n);
         }
     } while( n > 0 );
+}
+
+static int
+read_from_filter(struct selector_key *key) {
+    log(INFO, "read_from_filter: Reading from filter...");
+    unsigned ret = COPY;
+    int fd = key->fd;
+    struct connection  * conn = ATTACHMENT(key);
+    struct copy * copy  = get_copy_ptr(key);
+    struct opt * opt = get_opt();
+    size_t size;
+    buffer * buffer = copy->rb;
+    uint8_t *ptr = buffer_write_ptr(buffer, &size);
+
+    bool interest_retr = opt->cmd ? true : false;
+    log(DEBUG, "read_from_filter: opt->cmd exist: %s", opt->cmd);
+
+    ssize_t n = read(fd, ptr, size);
+    if( n > 0 ) {
+        // TODO update metrics
+        buffer_write_adv(buffer, n);
+        log(INFO, "read_from_filter: Coppied %zd bytes from filter to proxy", n);
+
+    } else if( n == 0 ) {
+        log(DEBUG, "read_from_filter: Filter EOF.");
+        filter_destroy(key);
+        // TODO aca que onda?
+        if(!buffer_can_read(buffer) && !buffer_can_write(&conn->write_buffer)) {
+            copy->duplex = OP_NOOP;
+        }
+
+    } else {
+        log(FATAL, "read_from_filter: Filter broken >,<");
+        conn->data_filter.state = FILTER_ENDING;
+    }
+
+    return ret;
 }
 
 //-----------------------------------------------------------------------------------------------------------------

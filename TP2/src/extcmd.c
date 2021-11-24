@@ -39,77 +39,10 @@ env_var_init(char *username) { // envvar_buffer es global definido en args.h
     }
 }
 
-int
-read_from_filter(struct selector_key *key) {
-    log(INFO, "read_from_filter: Reading from filter...");
-    unsigned ret = COPY;
-    int fd = key->fd;
-    struct connection  * conn = ATTACHMENT(key);
-    struct copy * copy  = get_copy_ptr(key);
-    struct opt * opt = get_opt();
-    size_t size;
-    buffer * buffer = copy->rb;
-    uint8_t *ptr = buffer_write_ptr(buffer, &size);
-
-    bool interest_retr = opt->cmd ? true : false;
-    log(DEBUG, "read_from_filter: opt->cmd exist: %s", opt->cmd);
-
-    ssize_t n = read(fd, ptr, size);
-    if( n > 0 ) {
-        // TODO update metrics
-        buffer_write_adv(b, n)
-        log(INFO, "read_from_filter: Coppied %zd bytes from filter to proxy", n);
-
-    } else if( n == 0 ) {
-        log(DEBUG, "read_from_filter: Filter EOF.");
-        filter_destroy(key);
-        // TODO aca que onda?
-        if(!buffer_can_read(buffer) && !buffer_can_write(conn->write_buffer)) {
-            copy->duplex = OP_NOOP;
-        }
-
-    } else {
-        log(FATAL, "read_from_filter: Filter broken >,<");
-        conn->data_filter.state = FILTER_ENDING;
-    }
-
-    return ret;
-}
-
-int
-write_buffer_to_filter(struct selector_key *key, buffer* buff) {
-    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-    buffer *sb = filter->wb;
-    uint8_t *b;
-    size_t count;
-    ssize_t n = 0;
-    size_t i = 0;
-
-    char c;
-    while (buffer_can_read(buff) && n == 0) {
-        c = buffer_read(buff);
-        i++;
-        if (c == '\n') {
-            n = i;
-        }
-        buffer_write(sb, c);
-    }
-
-    if (n == 0) {
-        return 0;
-    }
-
-    b = buffer_read_ptr(sb, &count);
-    n = write(ATTACHMENT(key)->w_to_filter_fds[WRITE], b, count);
-    buffer_reset(sb);
-
-    return n;
-}
-
 void
 filter_destroy(struct selector_key *key) {
-    struct connnection *  conn    = ATTACHMENT(key);
-    struct data_filter * data_filter   = &conn->data_filter;
+    struct connection *  conn        = ATTACHMENT(key);
+    struct data_filter * data_filter  = &conn->data_filter;
 
     if(data_filter->pid_child > 0) {
         log(INFO, "filter_destroy: Destroying process %ld", (long)data_filter->pid_child);
@@ -125,7 +58,7 @@ filter_destroy(struct selector_key *key) {
             selector_unregister_fd(key->s, data_filter->fdin[i]);
             close(data_filter->fdin[i]);
         }
-        if(filter_data->fdout[i] > 0) {
+        if(data_filter->fdout[i] > 0) {
             selector_unregister_fd(key->s, data_filter->fdout[i]);
             close(data_filter->fdout[i]);
         }
