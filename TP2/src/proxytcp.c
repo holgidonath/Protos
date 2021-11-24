@@ -727,6 +727,52 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
     return admin;
 }
 
+int
+create_management_socket6(struct sockaddr_in6  addr, struct opt opt)
+{
+    memset(&addr, 0, sizeof(addr));
+    addr.sin6_family      = AF_INET6;
+    addr.sin6_port        = htons(opt.mgmt_port);
+
+    if(opt.mgmt_addr != NULL) {
+        memcpy(addr.sin6_addr.s6_addr, opt.mgmt_addr, 16);
+
+    } else {
+        addr.sin6_addr = in6addr_any;
+    }
+
+    const int admin = socket(AF_INET6, SOCK_STREAM, IPPROTO_SCTP);
+    if(admin < 0) {
+        perror("unable to create management socket");
+        return -1;
+    }
+
+    fprintf(stdout, "Listening on SCTP port %d\n", opt.mgmt_port);
+
+    // man 7 ip. no importa reportar nada si falla.
+
+    struct sctp_initmsg initmsg;
+    memset (&initmsg, 0, sizeof (initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    setsockopt(admin, IPPROTO_SCTP,SCTP_INITMSG, &initmsg, sizeof(initmsg));
+    setsockopt(admin, SOL_IPV6, IPV6_V6ONLY, &(int){ 1 }, sizeof(int));
+
+    if(bind(admin, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
+        perror("unable to bind management socket");
+        return -1;
+    }
+
+    if (listen(admin, 20) < 0) {
+        perror("unable to listen in management socket");
+        return -1;
+    }
+
+    return admin;
+}
+
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                          RESOLVE_ORIGIN FUNCTIONS
@@ -1726,14 +1772,14 @@ main(const int argc, char **argv) {
     appname = *argv;
     parse_options(argc, argv, &opt);
     /* print options just for debug */
-    log(INFO,"fstderr       = %s\n", opt.fstderr);
-    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
-    log(INFO,"origin_port   = %d\n", opt.origin_port);
-    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
-    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
-    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
-    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
-    log(INFO,"cmd           = %s\n", opt.cmd);
+//    log(INFO,"fstderr       = %s\n", opt.fstderr);
+//    log(INFO,"local_port    = %d\n", opt.local_port); // local port to listen connections
+//    log(INFO,"origin_port   = %d\n", opt.origin_port);
+//    log(INFO,"mgmt_port     = %d\n", opt.mgmt_port);
+//    log(INFO,"mgmt_addr     = %s\n", opt.mgmt_addr);
+//    log(INFO,"pop3_addr     = %s\n", opt.pop3_addr);
+//    log(INFO,"origin_server = %s\n", opt.origin_server); // listen to a specific interface
+//    log(INFO,"cmd           = %s\n", opt.cmd);
 
     close(0);
 
@@ -1744,7 +1790,7 @@ main(const int argc, char **argv) {
     struct sockaddr_in  addr;
     struct sockaddr_in6 addr6;
     struct sockaddr_in  mngmt_addr;
-    struct sockaddr_in6 mngmt_serveraddr6;
+    struct sockaddr_in6 mngmt_addr6;
     socklen_t admin_addr_length;
     socklen_t addr6len = sizeof(addr6);
 
@@ -1753,7 +1799,7 @@ main(const int argc, char **argv) {
     should_parse = 0;
     should_parse_retr = 0;
     int proxy_fd, proxy6_fd;
-    int admin_fd = create_management_socket(mngmt_addr, opt);
+    int admin_fd, admin6_fd;
 
     int ip_version = opt.pop3_addr != NULL ? ipversion_check(opt.pop3_addr) : NULL;
     if(ip_version == AF_INET) {
@@ -1767,7 +1813,19 @@ main(const int argc, char **argv) {
         proxy6_fd = create_socketv6(addr6, opt);
     }
 
-    if(proxy_fd == -1 || admin_fd == -1 || proxy6_fd == -1)
+    ip_version = opt.mgmt_addr != NULL ? ipversion_check(opt.mgmt_addr) : NULL;
+    if(ip_version == AF_INET) {
+        admin_fd = create_management_socket(mngmt_addr, opt);
+
+    } else if (ip_version == AF_INET6) {
+        admin6_fd = create_management_socket6(mngmt_addr6, opt);
+
+    } else {
+        admin_fd = create_management_socket(mngmt_addr, opt);
+        admin6_fd = create_management_socket6(mngmt_addr6, opt);
+    }
+
+    if(proxy_fd == -1 || admin_fd == -1 || proxy6_fd == -1 || admin6_fd == -1)
     {
         goto finally;
     }
