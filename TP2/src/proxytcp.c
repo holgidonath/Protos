@@ -612,7 +612,7 @@ create_proxy_socket(struct sockaddr_in addr, struct opt opt)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = opt.pop3_addr != NULL ? opt.pop3_addr : htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.local_port);
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -645,7 +645,7 @@ create_management_socket(struct sockaddr_in addr, struct opt opt)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = opt.mgmt_addr != NULL ? opt.mgmt_addr : htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.mgmt_port);
 
     const int admin = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
