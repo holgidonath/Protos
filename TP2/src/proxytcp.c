@@ -656,7 +656,7 @@ int create_socketv6(struct sockaddr_in6 addr, struct opt opt) {
     addr.sin6_port           = htons(opt.local_port);
 
     if(opt.pop3_addr != NULL) {
-        memcpy(addr.sin6_addr.s6_addr, opt.pop3_addr, 16);
+        inet_pton(AF_INET6, opt.pop3_addr, &addr.sin6_addr);
 
     } else {
         addr.sin6_addr = in6addr_any;
@@ -674,7 +674,7 @@ int create_socketv6(struct sockaddr_in6 addr, struct opt opt) {
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
     setsockopt(sock, SOL_IPV6, IPV6_V6ONLY, &(int){ 1 }, sizeof(int));
 
-    if(bind(sock, (struct sockaddr_in6*) &addr, sizeof(struct sockaddr_in6)) < 0) {
+    if(bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6)) < 0) {
         perror("create_socketv6: unable to bind proxy socket");
         return -1;
     }
@@ -735,7 +735,7 @@ create_management_socket6(struct sockaddr_in6  addr, struct opt opt)
     addr.sin6_port        = htons(opt.mgmt_port);
 
     if(opt.mgmt_addr != NULL) {
-        memcpy(addr.sin6_addr.s6_addr, opt.mgmt_addr, 16);
+        inet_pton(AF_INET6, opt.mgmt_addr, &addr.sin6_addr);
 
     } else {
         addr.sin6_addr = in6addr_any;
