@@ -121,14 +121,8 @@ resolve_done(struct selector_key * key);
 static void *
 resolve_blocking(void * data);
 
-//static void
-//filter_init(const unsigned state, struct selector_key *key);
-//
-//static unsigned
-//filter_send(struct selector_key *key);
-//
-//static unsigned
-//filter_recv(struct selector_key *key);
+static struct copy *
+get_copy_ptr(struct selector_key *key);
 
 static void
 socket_forwarding_cmd (struct selector_key * key, char *cmd);
@@ -748,33 +742,57 @@ resolve_done(struct selector_key * key)
 //                                          COPY FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
 
+/* Delego el chequeo del fd para saber que struct copy usar */
+static struct copy *
+get_copy_ptr(struct selector_key *key) {
+    struct connection * conn = ATTACHMENT(key);
+    struct copy * ptr = NULL;
 
-
-
-
-
-
-
-
-
+    if(key->fd == conn->client_fd) {
+        ptr = &conn->copy_client;
+    }
+    else if(key->fd == conn->origin_fd) {
+        ptr = &conn->copy_origin;
+    }
+    else {
+        ptr =  &conn->copy_filter;
+    }
+    if(ptr == NULL) {
+        log(ERROR, "get_copy_ptr: NULL pointer return for fd=%s", key->fd);
+    }
+    return ptr;
+}
 
 static void
 copy_init(const unsigned state, struct selector_key *key)
 {
     struct copy * d = &ATTACHMENT(key)->copy_client;
 
+    // Init copy client struct
     d->fd       = &ATTACHMENT(key)->client_fd;
     d->rb       = &ATTACHMENT(key)->read_buffer;
     d->wb       = &ATTACHMENT(key)->write_buffer;
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->copy_origin;
+    d->target   = COPY_CLIENT;
 
+    // Init copy origin struct
     d			= &ATTACHMENT(key)->copy_origin;
     d->fd       = &ATTACHMENT(key)->origin_fd;
     d->rb       = &ATTACHMENT(key)->write_buffer;
     d->wb       = &ATTACHMENT(key)->read_buffer;
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->copy_client;
+    d->target   = COPY_ORIGIN;
+
+    // Init coy filter struct
+    d			= &ATTACHMENT(key)->copy_origin;
+    d->rb       = &ATTACHMENT(key)->filter_buffer;
+    d->wb       = &ATTACHMENT(key)->write_buffer;
+    d->duplex   = OP_READ | OP_WRITE;
+    d->other    = &ATTACHMENT(key)->copy_filter;
+    d->target   = COPY_FILTER;
+
 }
 
 static fd_interest
@@ -799,20 +817,20 @@ copy_compute_interests_origin(fd_selector s, struct  copy* d)
 static fd_interest
 copy_compute_interests_client(fd_selector s, struct  copy* d)
 {
-fd_interest ret = OP_NOOP;
-if((d->duplex & OP_READ) && buffer_can_write(d->rb) && !has_written)
-{
-ret |= OP_READ;
-}
-if((d->duplex & OP_WRITE) && buffer_can_read(d->wb) && has_written)
-{
-ret |= OP_WRITE;
-}
-if(SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret))
-{
-abort();
-}
-return ret;
+    fd_interest ret = OP_NOOP;
+    if((d->duplex & OP_READ) && buffer_can_write(d->rb) && !has_written)
+    {
+        ret |= OP_READ;
+    }
+    if((d->duplex & OP_WRITE) && buffer_can_read(d->wb) && has_written)
+    {
+        ret |= OP_WRITE;
+    }
+    if(SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret))
+    {
+        abort();
+    }
+    return ret;
 }
 
 static struct copy *
@@ -857,39 +875,28 @@ send_to_client(uint8_t *ptr, size_t  size, struct selector_key *key,struct copy*
 void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
 copy_r(struct selector_key *key){
-
-    has_written = false;
-    struct connection *conn = ATTACHMENT(key);
     log(DEBUG, "==== COPY_R ====");
-    struct copy *d = copy_ptr(key);
-    assert(*d->fd == key->fd);
 
+    unsigned ret = COPY; // starting state for interaction
+    struct connection * conn = ATTACHMENT(key);
+    struct copy * d          = copy_ptr(key);
+    has_written = false;
+
+    assert(*d->fd == key->fd);
 
     size_t size;
     ssize_t n;
 
-    buffer* b       = d->rb;
-    unsigned ret    = COPY;
-
+    buffer* b = d->rb; // read buffer for current data struct
     uint8_t *ptr = buffer_write_ptr(b, &size);
+
     n = recv(key->fd, ptr, size, 0);
-
-
 
     if( n > 0 )
     {
         buffer_write_adv(b,n);
         if(key->fd == conn->origin_fd)
         {
-//            if(capa_found)
-//            {
-//                check_if_pipe_present(ptr, b);
-//                if(!has_pipelining){
-//                    n += 12;
-//                }
-//                capa_found = false;
-//            }
-//            buffer_write_adv(b,n);
             has_written = true;
             log(DEBUG, "READING FROM ORIGIN:%s", ptr);
             if(should_parse_retr){

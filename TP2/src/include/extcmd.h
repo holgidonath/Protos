@@ -14,18 +14,19 @@ void worker_secondary(struct selector_key *key);
 /**
  * Posibles estados del filtro.
  */
-typedef enum filterState {
+typedef enum filter_status {
     FILTER_CLOSE,
     FILTER_ENDING,
     FILTER_ALL_SENT,
     FILTER_STARTING,
     FILTER_FILTERING,
-} filterState;
+} filter_status;
 
-struct extern_cmd {
-    int                     pipe_in[2];
-    int                     pipe_out[2];
-    filterState             state;
-};
+typedef struct data_filter {
+    int                     fdin[2];
+    int                     fdout[2];
+    filter_status           state;
+    pid_t                   pid_child
+}; data_filter
 
 #endif //PROTOS_EXTCMD_H

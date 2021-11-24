@@ -34,6 +34,12 @@ enum proxy_states
     PERROR,
 };
 
+typedef enum copy_target {
+    COPY_CLIENT,
+    COPY_ORIGIN,
+    COPY_FILTER,
+} copy_target;
+
 typedef enum address_type {
     ADDR_IPV4   = 0x01,
     ADDR_IPV6   = 0x02,
@@ -44,13 +50,15 @@ typedef enum address_type {
 /*                     STRUCTURES                       */
 /* ==================================================== */
 /* ----------- COPY -------- */
-struct copy
-{
-    int *fd;
-    buffer *rb, *wb;
-    fd_interest duplex;
-    struct copy *other;
+struct copy {
+    int           *fd;
+    buffer        *rb;
+    buffer        *wb;
+    fd_interest   duplex;
 
+    copy_target   target;
+
+    struct copy * other;
 };
 
 /* --------- ADDRESS  -------- */
@@ -72,30 +80,40 @@ typedef struct address_data {
 /* --------- CONNECTION  -------- */
 struct connection
 {
-    int client_fd;
-    struct copy copy_client;
-    int origin_fd;
-    struct address_data origin_data;
-    struct addrinfo *origin_resolution;
-    struct addrinfo *origin_resolution_current;
-    struct copy copy_origin;
-    buffer read_buffer, write_buffer;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
-    struct state_machine stm;
-    struct connection * next;
-    struct sockaddr_storage       client_addr;
-    socklen_t                     client_addr_len;
+    struct state_machine    stm;
+
+    int                     client_fd;
+    int                     origin_fd;
+
+    struct copy             copy_client;
+    struct copy             copy_origin;
+    struct copy             copy_filter
+
+    struct address_data     origin_data;
+
+    struct addrinfo *       origin_resolution;
+    struct addrinfo *       origin_resolution_current;
+
+    buffer                  read_buffer;
+    buffer                  write_buffer;
+    buffer                  filter_buffer;
+
+    uint8_t                 raw_buff_a[2048];
+    uint8_t                 raw_buff_b[2048];
+
+    struct connection *     next;
+
+    struct sockaddr_storage client_addr;
+
+    socklen_t               client_addr_len;
+
     unsigned                references;
+
     bool                    was_greeted;
 
     /* External Process */
-    struct extern_cmd    extern_cmd;
-    int                     w_to_filter_fds[2];
-    int                     r_from_filter_fds[2];
-    bool                    was_retr;
-    bool                    read_all_mail;
-    bool                    has_filtered_mail;
-    bool                    filtered_all_mail;
+    struct filter_data      data_filter;
+
 };
 
 
