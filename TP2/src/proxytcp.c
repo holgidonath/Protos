@@ -656,7 +656,7 @@ int create_socketv6(struct sockaddr_in6 addr, struct opt opt) {
     addr.sin6_port           = htons(opt.local_port);
 
     if(opt.pop3_addr != NULL) {
-        sprintf(addr.sin6_addr.s6_addr, "%s", opt.pop3_addr);
+        memcpy(addr.sin6_addr.s6_addr, opt.pop3_addr, 16);
 
     } else {
         addr.sin6_addr = in6addr_any;
