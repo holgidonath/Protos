@@ -6,9 +6,9 @@
 typedef struct metrics * metrics_t;
 
 struct metrics {
-    uint32_t concurrent_connections;
-    uint32_t total_connections;
-    uint32_t bytes_transfered;
+    unsigned long concurrent_connections;
+    unsigned long total_connections;
+    unsigned long bytes_transfered;
 };
 
 metrics_t
