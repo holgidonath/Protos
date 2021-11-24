@@ -112,6 +112,9 @@ copy_r(struct selector_key *key);
 static unsigned
 copy_w(struct selector_key *key);
 
+static fd_interest
+filter_compute_interest(fd_selector s, struct copy * copy, struct data_filter * data_filter);
+
 static unsigned
 connection_ready(struct selector_key  *key);
 
@@ -831,6 +834,32 @@ copy_compute_interests_client(fd_selector s, struct  copy* d)
         abort();
     }
     return ret;
+}
+
+static fd_interest
+filter_compute_interest(fd_selector s, struct copy * copy, struct data_filter * data_filter) {
+
+    fd_interest retWrite = OP_NOOP;
+    fd_interest retRead  = OP_NOOP;
+
+    if(data_filter->state == FILTER_FILTERING) {
+        if(buffer_can_read(copy->wb)) // para saber si vino el .\r\n
+            retWrite = WRITE;
+        if(SELECTOR_SUCCESS != selector_set_interest(s, data_filter->fdin[WRITE], retWrite))
+        log(ERROR, "Problem trying to set interest: %d, to selector in filter, in pipe.", retWrite);
+    }
+
+    if(buffer_can_write(copy->rb)) {
+        retRead = READ;
+    }
+
+    if(SELECTOR_SUCCESS != selector_set_interest(s, data_filter->fdout[READ], retRead) {
+        log(FATAL, "Problem trying to set interest: %d, to selector in filter, out pipe.", retRead);
+        abort();
+    }
+
+    log(INFO, "Setting filter interest: WRITE: %d y READ %d.", retWrite, retRead);
+    return retRead | retWrite;
 }
 
 static struct copy *

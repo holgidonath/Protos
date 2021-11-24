@@ -53,7 +53,7 @@ read_from_filter(struct selector_key *key) {
     struct copy * copy  = get_copy_ptr(key);
     struct opt * opt = get_opt();
     size_t size;
-    buffer * buffer = copy->read_buffer;
+    buffer * buffer = copy->rb;
     uint8_t *ptr = buffer_write_ptr(buffer, &size);
 
     bool interest_retr = opt->cmd ? true : false;
