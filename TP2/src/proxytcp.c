@@ -1813,7 +1813,7 @@ main(const int argc, char **argv) {
 
     } else {
         proxy_fd = create_socketv4(addr, opt);
-        proxy6_fd = create_socketv6(addr6, opt);
+//        proxy6_fd = create_socketv6(addr6, opt);
     }
 
     ip_version = opt.mgmt_addr != NULL ? ipversion_check(opt.mgmt_addr) : NULL;
@@ -1825,7 +1825,7 @@ main(const int argc, char **argv) {
 
     } else {
         admin_fd = create_management_socket(mngmt_addr, opt);
-        admin6_fd = create_management_socket6(mngmt_addr6, opt);
+//        admin6_fd = create_management_socket6(mngmt_addr6, opt);
     }
 
     if(proxy_fd == -1 || admin_fd == -1 || proxy6_fd == -1 || admin6_fd == -1)
