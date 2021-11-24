@@ -118,4 +118,3 @@ hello_marshall(buffer *b, const uint8_t method) {
     buffer_write_adv(b, 2);
     return 2;
 }
-

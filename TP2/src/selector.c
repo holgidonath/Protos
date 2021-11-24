@@ -168,8 +168,8 @@ struct fdselector {
  * determina el tamaño a crecer, generando algo de slack para no tener
  * que realocar constantemente.
  */
-static
-size_t next_capacity(const size_t n) {
+static size_t
+next_capacity(const size_t n) {
     unsigned bits = 0;
     size_t tmp = n;
     while(tmp != 0) {

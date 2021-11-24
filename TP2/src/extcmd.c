@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "include/extcmd.h"
 #include "include/args.h"
 #include "include/selector.h"
@@ -12,70 +13,17 @@
 /* ==================================================== */
 
 int
+write_buffer_to_filter(struct selector_key *key, buffer* buff);
+
+int
 read_ext_cmd(struct selector_key *key, buffer* buff);
 
 void
-env_var_init(char *username);
+env_var_init(void);
 
 /* ==================================================== */
 /*                   IMPLEMENTATION                     */
 /* ==================================================== */
-void
-env_var_init(char *username) {
-    char env_pop3filter_version[30];
-    char env_pop3_server[150];
-    char env_pop3_username[30];
-    struct opt * opt = get_opt();
-    sprintf(env_pop3filter_version, "POP3FILTER_VERSION=%s", VERSION);
-    if(putenv(env_pop3filter_version)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", env_pop3filter_version);
-    }
-
-    sprintf(env_pop3_server, "POP3_SERVER=%s", opt->origin_server);
-    if(putenv(env_pop3_server)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", env_pop3_server);
-    }
-
-    sprintf(env_pop3_server, "POP3_USERNAME=%s", username);
-    if(putenv(env_pop3_username)) {
-        log(ERROR, "putenv() couldn't create %s environment variable", username);
-    }
-}
-
-int
-read_ext_cmd(struct selector_key *key, buffer* buff) {
-    int bytes_read = read(ATTACHMENT(key)->r_from_filter_fds[READ], buff, strlen( (char*)buff) );
-    if( bytes_read < 0 )
-    log(ERROR, "read_ext_cmd: reading from file descriptor failed");
-    return bytes_read;
-}
-
-void
-worker_secondary(struct selector_key *key) {
-    struct connection * conn = ATTACHMENT(key);
-    struct extern_cmd * filter = (struct extern_cmd *) &conn->extern_cmd;
-
-    uint8_t dataBuffer[2048];
-    ssize_t n;
-    do {
-        n = read(STDIN_FILENO, dataBuffer, sizeof(dataBuffer));
-        if(n > 0)
-            write(STDOUT_FILENO, dataBuffer, n);
-    } while(n > 0);
-    log(INFO, "worker_secondary: Back from reading from external cmd")
-
-    for(int i = 0; i < 2; i++) {
-        if(filter->pipe_in[i] > 0) {
-            selector_unregister_fd(key->s, filter->pipe_in[i]);
-            close(filter->pipe_in[i]);
-        }
-        if(filter->pipe_out[i] > 0) {
-            selector_unregister_fd(key->s, filter->pipe_out[i]);
-            close(filter->pipe_out[i]);
-        }
-    }
-    memset(filter, 0, sizeof(filter));
-}
 
 //
 //int
@@ -106,4 +54,12 @@ worker_secondary(struct selector_key *key) {
 //    buffer_reset(sb);
 //
 //    return n;
+//}
+
+//int
+//read_ext_cmd(struct selector_key *key, buffer* buff) {
+//    int bytes_read = read(ATTACHMENT(key)->`r_from_filter_fds`[READ], buff, strlen( (char*)buff) );
+//    if( bytes_read < 0 )
+//    log(ERROR, "read_ext_cmd: reading from file descriptor failed");
+//    return bytes_read;
 //}

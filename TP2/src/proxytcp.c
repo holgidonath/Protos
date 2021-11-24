@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include <ctype.h> // toupper
 #include <linux/sctp.h>
+#include <sys/wait.h>
 
 #include "include/buffer.h"
 #include "include/args.h"
@@ -85,7 +86,12 @@ bool capa_found = false;
 bool has_pipelining = true;
 bool has_written = false;
 bool greeted = true;
-
+bool filter_active = false;
+bool filter_done = false;
+char user_buffer[1024] = "";
+bool filter_is_ready = false;
+bool filter_finish = false;
+bool retr_found = false;
 char * get_stats(void)
 {
     char * to_ret = malloc(100); //TODO: free este string
@@ -121,14 +127,14 @@ resolve_done(struct selector_key * key);
 static void *
 resolve_blocking(void * data);
 
-//static void
-//filter_init(const unsigned state, struct selector_key *key);
-//
-//static unsigned
-//filter_send(struct selector_key *key);
-//
-//static unsigned
-//filter_recv(struct selector_key *key);
+static void
+filter_init(const unsigned state, struct selector_key *key);
+
+static unsigned
+filter_send(struct selector_key *key);
+
+static unsigned
+filter_recv(struct selector_key *key);
 
 static void
 socket_forwarding_cmd (struct selector_key * key, char *cmd);
@@ -139,7 +145,7 @@ extern_cmd_finish(struct selector_key *key);
 int parse_command(char * ptr);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
-char * parse_user(char * ptr);
+void parse_user(char* buffer_dest, char * ptr);
 
 static const struct state_definition client_statbl[] =
 {
@@ -153,10 +159,9 @@ static const struct state_definition client_statbl[] =
 
     },
     {
-        .state            = FILTER,
-//        .on_arrival       = filter_init,
-//        .on_read_ready    = filter_recv,
-//        .on_write_ready   = filter_send,
+            .state = FILTER,
+            .on_write_ready = filter_init,
+
     },
     {
         .state = COPY,
@@ -383,14 +388,11 @@ new_connection(int client_fd)
 
         con->references = 1;
         con->was_greeted = false;
-        con->was_retr = false;
-        con->has_filtered_mail = false;
-        con->read_all_mail = false;
-        con->filtered_all_mail = false;
         stm_init(&con->stm);
 
         buffer_init(&con->read_buffer, N(con->raw_buff_a), con->raw_buff_a);
         buffer_init(&con->write_buffer, N(con->raw_buff_b), con->raw_buff_b);
+        buffer_init(&con->filter_buffer, N(con->raw_buff_c), con->raw_buff_c);
     }
 
     metrics->concurrent_connections++;
@@ -610,7 +612,7 @@ create_proxy_socket(struct sockaddr_in addr, struct opt opt)
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = opt.pop3_addr != NULL ? opt.pop3_addr : htonl(INADDR_ANY);
     addr.sin_port        = htons(opt.local_port);
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -741,23 +743,90 @@ resolve_done(struct selector_key * key)
 
     return origin_connect(key);
 }
+//-----------------------------------------------------------------------------------------------------------------
+//                                          FILTER FUNCTIONS
+//-----------------------------------------------------------------------------------------------------------------
+
+static void workBlockingSlave(void * data) {
+    uint8_t dataBuffer[2048];
+    ssize_t n;
+    do {
+        n = read(STDIN_FILENO, dataBuffer, sizeof(dataBuffer));
+        if(n > 0)
+            write(STDOUT_FILENO, dataBuffer, n);
+    } while(n > 0);
+
+}
+
+void
+env_var_init(void) {
+    char env_pop3filter_version[30];
+    char env_pop3_server[150];
+    char env_pop3_username[30];
+    struct opt * opt = get_opt();
+
+    sprintf(env_pop3filter_version, "POP3FILTER_VERSION=%s", VERSION);
+
+    sprintf(env_pop3_server, "POP3_SERVER=%s", opt->origin_server);
+
+    sprintf(env_pop3_username, "POP3_USERNAME=%s", user_buffer);
+}
+
+static void filter(struct selector_key* key)
+{
+    struct connection *conn = ATTACHMENT(key);
+    struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+    selector_status status;
+
+    conn->infd = STDIN_FILENO;
+    conn->outfd = STDOUT_FILENO;
+
+    log(INFO, "Starting filter");
+
+    if (pipe(filter->pipe_in) < 0 || pipe(filter->pipe_out) < 0)
+    {
+        log(FATAL, "Fail to create Pipes");
+    }
+
+    pid_t pid = fork();
+    if(pid == 0) {
+        close(conn->infd);
+        close(conn->outfd);
+        close(filter->pipe_in[1]);
+        close(filter->pipe_out[0]);
+        filter->pipe_in[1] = filter->pipe_out[0] = -1;
+        dup2(filter->pipe_in[0], STDIN_FILENO);
+        dup2(filter->pipe_out[1], STDOUT_FILENO);
+        env_var_init();
+        char* env_list[] = { env_pop3filter_version, env_pop3_server, env_pop3_username, NULL };
+        if(execle("/bin/sh", "sh", "-c", opt.cmd, (char *) NULL, env_list) == -1 )
+        {
+            perror("executing command");
+            close(filter->pipe_in[0]);
+            close(filter->pipe_out[1]);
+        }
+
+    }
+    else
+    {
+            close(filter->pipe_in[0]);
+            close(filter->pipe_out[1]);
+        selector_fd_set_nio(filter->pipe_in[1]);
+        selector_fd_set_nio(filter->pipe_out[0]);
+            filter->pipe_in[0]  = filter->pipe_out[1] = -1;
+            status = selector_register(key->s, filter->pipe_in[1], &proxy_handler, OP_NOOP, conn);
+            conn->references++;
+            status = selector_register(key->s, filter->pipe_out[0], &proxy_handler, OP_NOOP, conn);
+            conn->references++;
+        }
+
+}
 
 
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                          COPY FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
 static void
 copy_init(const unsigned state, struct selector_key *key)
 {
@@ -769,13 +838,23 @@ copy_init(const unsigned state, struct selector_key *key)
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->copy_origin;
 
+
     d			= &ATTACHMENT(key)->copy_origin;
     d->fd       = &ATTACHMENT(key)->origin_fd;
     d->rb       = &ATTACHMENT(key)->write_buffer;
     d->wb       = &ATTACHMENT(key)->read_buffer;
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->copy_client;
+
+
+    d           = &ATTACHMENT(key)->extern_cmd.copy_filter;
+    d->rb       = &ATTACHMENT(key)->filter_buffer;
+    d->wb       = &ATTACHMENT(key)->write_buffer;
+    d->duplex   = OP_READ | OP_WRITE;
+
+
 }
+
 
 static fd_interest
 copy_compute_interests_origin(fd_selector s, struct  copy* d)
@@ -818,17 +897,17 @@ return ret;
 static struct copy *
 copy_ptr(struct selector_key * key)
 {
-    struct copy *d = &ATTACHMENT(key)->copy_client;
+    struct connection *conn = ATTACHMENT(key);
 
-    if(*d->fd == key->fd)
+    if(conn->client_fd == key->fd)
     {
-        //ok
+        return &conn->copy_client;
     }
-    else
+    else if(conn->origin_fd == key->fd)
     {
-        d = d->other;
+        return &conn->copy_origin;
     }
-    return d;
+    return &conn->extern_cmd.copy_filter;
 }
 
 int
@@ -856,13 +935,15 @@ send_to_client(uint8_t *ptr, size_t  size, struct selector_key *key,struct copy*
 
 void check_if_pipe_present(char * ptr, buffer * b);
 static unsigned
-copy_r(struct selector_key *key){
+copy_r(struct selector_key *key)
+         {
 
     has_written = false;
+    struct extern_cmd *filtro = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct connection *conn = ATTACHMENT(key);
     log(DEBUG, "==== COPY_R ====");
     struct copy *d = copy_ptr(key);
-    assert(*d->fd == key->fd);
+//    assert(*d->fd == key->fd);
 
 
     size_t size;
@@ -872,40 +953,34 @@ copy_r(struct selector_key *key){
     unsigned ret    = COPY;
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
+
+    if(opt.cmd != NULL && filter_active == true)
+    {
+        n = read(filtro->pipe_out[0], ptr, size);
+
+        if(n > 0)
+        {
+            log(INFO, "leyendo del filtro");
+            filter_active = false;
+            buffer_write_adv(b,n);
+//            selector_set_interest(key->s, filtro->pipe_out[0], OP_NOOP);
+//            selector_set_interest(key->s, conn->client_fd, OP_WRITE);
+        } else {
+            log(FATAL, "NO LEI NADA");
+        }
+
+        return COPY;
+    }
+
     n = recv(key->fd, ptr, size, 0);
-
-
-
     if( n > 0 )
     {
         buffer_write_adv(b,n);
         if(key->fd == conn->origin_fd)
         {
-//            if(capa_found)
-//            {
-//                check_if_pipe_present(ptr, b);
-//                if(!has_pipelining){
-//                    n += 12;
-//                }
-//                capa_found = false;
-//            }
-//            buffer_write_adv(b,n);
+
             has_written = true;
             log(DEBUG, "READING FROM ORIGIN:%s", ptr);
-            if(should_parse_retr){
-                log(INFO, "parse retr");
-                if (opt.cmd)
-                {
-                    socket_forwarding_cmd(key,opt.cmd);
-                    buffer_reset(b);
-                    n = recv(conn->extern_cmd.pipe_out[WRITE], ptr, size, 0);
-                    buffer_write_adv(b,n);
-                }
-                should_parse_retr = 0;
-                //ret = FILTER;
-            }else{
-                log(INFO, "dont parse retr");
-            }
             copy_compute_interests_origin(key->s, d);
             copy_compute_interests_client(key->s, d->other);
 
@@ -931,6 +1006,7 @@ copy_r(struct selector_key *key){
         ret = DONE;
     }
 
+
         if(d->duplex == OP_NOOP) {
             ret = DONE;
         }
@@ -943,9 +1019,9 @@ copy_w(struct selector_key *key)
 {
     log(DEBUG, "==== COPY_W ====");
     struct connection *conn = ATTACHMENT(key);
-    struct extern_cmd *filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+    struct extern_cmd *filtro = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
     struct copy *d = copy_ptr(key);
-    assert(*d->fd == key->fd);
+//    assert(*d->fd == key->fd);
     int command = 0;
     size_t size;
     ssize_t n;
@@ -955,6 +1031,7 @@ copy_w(struct selector_key *key)
 
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
+
 
     if(key->fd == conn->origin_fd && size > 1)
     {
@@ -975,30 +1052,55 @@ copy_w(struct selector_key *key)
     else if(key->fd == conn->client_fd)
     {
 
-        log(DEBUG, "WRITING TO CLIENT");
         has_written = false;
         if(capa_found)
         {
             check_if_pipe_present(ptr, b);
             if(!has_pipelining){
                 size += 12;
+                buffer_write_adv(b, 12);
             }
-            buffer_write_adv(b, 12);
+
             capa_found = false;
+            n = send_to_client(ptr,size,key,d);
         }
-        n = send_to_client(ptr,size,key,d);
+        else if(retr_found)
+        {
+            log(DEBUG, "WRITING TO filter");
+            filter(key);
+            n = write(filtro->pipe_in[1], ptr, size);
+            log(INFO, "escribiendo al filto %d",n)
+
+//            buffer_read_adv(b,n);
+//            selector_set_interest(key->s, filtro->pipe_out[0], OP_READ);
+            filter_active = true;
+            retr_found = false;
+            ret =  COPY;
+
+        }
+        else if(filter_active == true)
+        {
+            b = &conn->filter_buffer;
+            ptr = buffer_write_ptr(b, &size);
+            n = read(filtro->pipe_out[0], ptr, size);
+
+            log(INFO, "Leyendo del filtro: %d",n)
+            buffer_write_adv(b, n);
+            ptr = buffer_read_ptr(b,&size);
+            n = send(key->fd, ptr, size,MSG_NOSIGNAL);
+            buffer_read_adv(b, n);
+            if(n > 0){
+                filter_active = false;
+            }
+
+        }
+        else
+        {
+            log(DEBUG, "WRITING TO CLIENT");
+            n = send_to_client(ptr,size,key,d);
+        }
 
     }
-
-//    else if(key->fd == conn->client_fd && capa_found)
-//    {
-//        check_if_pipe_present(ptr, b);
-//        capa_found = false;
-//        if(!has_pipelining){
-//            size += 12;
-//        }
-//        n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-//    }
 
     if( n < 0 ) {
         ret = PERROR;
@@ -1011,7 +1113,6 @@ copy_w(struct selector_key *key)
         ret = DONE;
     }
     else {
-        conn->has_filtered_mail = false;
         buffer_read_adv(b,n);
     }
 
@@ -1023,20 +1124,20 @@ copy_w(struct selector_key *key)
     return ret;
 }
 
-
-static void
-extern_cmd_finish(struct selector_key *key)
-{
-    struct connection *conn = ATTACHMENT(key);
-
-    close(conn->r_from_filter_fds[READ]);
-    selector_unregister_fd(key->s, conn->w_to_filter_fds[WRITE]);
-    selector_unregister_fd(key->s, conn->r_from_filter_fds[READ]);
-    conn->w_to_filter_fds[READ]     = -1;
-    conn->w_to_filter_fds[WRITE]    = -1;
-    conn->r_from_filter_fds[READ]   = -1;
-    conn->r_from_filter_fds[WRITE]  = -1;
-}
+//
+//static void
+//extern_cmd_finish(struct selector_key *key)
+//{
+//    struct connection *conn = ATTACHMENT(key);
+//
+//    close(conn->r_from_filter_fds[READ]);
+//    selector_unregister_fd(key->s, conn->w_to_filter_fds[WRITE]);
+//    selector_unregister_fd(key->s, conn->r_from_filter_fds[READ]);
+//    conn->w_to_filter_fds[READ]     = -1;
+//    conn->w_to_filter_fds[WRITE]    = -1;
+//    conn->r_from_filter_fds[READ]   = -1;
+//    conn->r_from_filter_fds[WRITE]  = -1;
+//}
 //-----------------------------------------------------------------------------------------------------------------
 //                                          PARSING AND POSTERIOR HANDLING FUNCTIONS
 //-----------------------------------------------------------------------------------------------------------------
@@ -1091,6 +1192,8 @@ int parse_command(char * ptr)
                 break;
             case USE:
                 if (c == 'R') {
+                    parse_user(user_buffer, ptr);
+                    log(INFO, "el usuario es %s", user_buffer);
                     state = USER;
 
                 } else if(c == '\r')
@@ -1185,7 +1288,7 @@ int parse_command(char * ptr)
             case RETR:
                 if(c == ' ') {
                     state = ARGUMENTS;
-                    should_parse_retr = 1;
+                    retr_found = true;
                 }
                 else if(c == '\r')
                 {
@@ -1274,178 +1377,6 @@ int parse_command(char * ptr)
     }
     return i;
 }
-
-
-int parse_command_old(char * ptr, int n){
-    int i = 0;
-    int state = BEGIN;
-    int rsp = 0;
-    char c = toupper(ptr[0]);
-    while(state != DONEPARSING)
-    {
-        log(INFO, "%c",c);
-       switch(state){
-           case BEGIN:
-           if(c == 'R'){
-               state = R;
-           }else if(c == 'U'){
-               state = U;
-           }else if(c == 'C'){
-               state = C;
-           }else if(c == 'P'){
-               state = P;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case R:
-           if(c == 'E'){
-               state = RE;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case RE:
-           if(c == 'T'){
-               state = RET;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case RET:
-           if(c == 'R'){
-               state = RETR;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case RETR:
-           should_parse_retr = 1;
-           state = GOTORN;
-           break;
-           case U:
-           if(c == 'S'){
-               state = US;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case US:
-           if(c == 'E'){
-               state = USE;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case USE:
-           if(c == 'R'){
-                parse_user(ptr);
-                //hay que ir copiando aca
-                state = GOTORN;
-           }else{
-               state = GOTORN;
-           }
-           break;
-
-           case P:
-           if(c == 'A'){
-               state = PA;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case PA:
-           if(c == 'S'){
-               state = PAS;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case PAS:
-           if(c == 'S'){
-               state = GOTORN;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case PASS:
-           state = GOTORN;
-           break;
-           case C:
-           if(c == 'A'){
-               state = CA;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case CA:
-           if(c == 'P'){
-               state = CAP;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case CAP:
-           if(c == 'A'){
-               state = CAPA; //TODO: aca hay que checkear antes de decir que encontramos el CAPA que lo que siga sea \r\n (creo que asi especifica pop3 que termina cada linea, sino ver RFC)
-               should_parse = 1;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case CAPA:
-           if(c == '\r'){
-               //log(INFO, "new line found");
-               state = CONTRABARRAR;
-           }else{
-               state = GOTORN;
-           }
-           break;
-           case CONTRABARRAR:
-           if(c == '\n'){
-               //log(INFO, "new line found");
-               log(INFO, "new line found");
-                state = BEGIN;
-           }else{
-               state=GOTORN;
-           }
-           break;
-           case NEWLINE:
-           //hacer lo del interest y demas
-           log(INFO, "new line found");
-           state = BEGIN;
-           break;
-           case DONERETR:
-           log(INFO, "RETR was found");
-           rsp = DONERETR;
-           state = GOTORN;
-           break;
-           case DONEUSER:
-           parse_user(ptr);
-           //hay que ir copiando aca
-           state = GOTORN;
-           break;
-           case GOTORN:
-           while(c != '\r'){
-               log(INFO,"%c",c);
-               i++;
-               c = toupper(ptr[i]);
-           }
-           state = CONTRABARRAR;
-           break;
-        }
-        // i++;
-        // c = toupper(ptr[i]);
-        if(i < n){
-            i++;
-            c = toupper(ptr[i]);
-        }else{
-            state = DONEPARSING;
-        }
-    }
-    return i;
-}
-
 
 void check_if_pipe_present(char * ptr, buffer *b){
     int i = 0;
@@ -1567,7 +1498,7 @@ bool parse_greeting(char * response, struct selector_key *key)
     return false;
 }
 
-char * parse_user(char * ptr){
+void parse_user(char* buffer_dest, char * ptr){
     int i = 5;
     int idx = 0;
     char buff[1024] = "";
@@ -1577,21 +1508,21 @@ char * parse_user(char * ptr){
         i++;
         idx++;
     }
+    strcpy(buffer_dest, buff);
     log(INFO,"User %s tried to login", buff);
-    return buff;
 }
 
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                      EXTERN COMMAND
 //-----------------------------------------------------------------------------------------------------------------
-//static void
-//filter_init(const unsigned state, struct selector_key *key) {
-//    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
-//
-//    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
-//    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
-//}
+static void
+filter_init(const unsigned state, struct selector_key *key) {
+    struct extern_cmd * filter = (struct extern_cmd *) &ATTACHMENT(key)->extern_cmd;
+
+    filter->mail_buffer = &(ATTACHMENT(key)->read_buffer);
+    filter->filtered_mail_buffer = &(ATTACHMENT(key)->write_buffer);
+}
 //
 //static unsigned
 //filter_send(struct selector_key *key) {
@@ -1691,53 +1622,52 @@ char * parse_user(char * ptr){
 //
 //    return ret;
 //}
-
-/* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
-static void
-socket_forwarding_cmd (struct selector_key * key, char *cmd) {
-    int n;
-    // pipe_in (w_to_filter_fds ): father --> child
-    // pipe_out (r_from_filter_fds): child  --> father
-    struct connection * conn = ATTACHMENT(key);
-    struct extern_cmd * filter = (struct extern_cmd *) &conn->extern_cmd;
-    int *pipe_in = filter->pipe_in;
-    int *pipe_out = filter->pipe_out;
-
-    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
-        log(FATAL, "socket_forwarding_cmd: Cannot create pipe");
-        exit(EXIT_FAILURE);
-    }
-
-    pid_t pid = fork();
-    if( pid == 0 ) {
-        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> pipe_in[READ]
-        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
-        close(pipe_in[WRITE]);
-        close(pipe_out[READ]);
-//        env_var_init(username); // TODO global username
-        system(cmd);
-        worker_secondary(&key); // escribe output del proceso en STDOUT
-    } else {
-        close(pipe_in[READ]);
-        close(pipe_out[WRITE]);
-
-        selector_status ss = SELECTOR_SUCCESS;
-        ss |= selector_register(key->s,
-                                pipe_in[WRITE],
-                                &proxy_handler,
-                                OP_NOOP,
-                                key->data);
-
-        ss |= selector_register(key->s,
-                                pipe_out[READ],
-                                &proxy_handler,
-                                OP_NOOP,
-                                key->data);
-
-        selector_fd_set_nio(pipe_in[WRITE]);
-        selector_fd_set_nio(pipe_out[READ]);
-    }
-}
+//
+///* Forward data from socket 'source' to socket 'destination' by executing the 'cmd' command */
+//static void
+//socket_forwarding_cmd (struct selector_key * key, char *cmd) {
+//    int n;
+//    // pipe_in (w_to_filter_fds ): father --> child
+//    // pipe_out (r_from_filter_fds): child  --> father
+//    int *pipe_in = ATTACHMENT(key)->w_to_filter_fds;
+//    int *pipe_out = ATTACHMENT(key)->r_from_filter_fds;
+//
+//    if (pipe(pipe_in) < 0 || pipe(pipe_out) < 0) { // create command input and output pipes
+//        log(FATAL, "socket_forwarding_cmd: Cannot create pipe");
+//        exit(EXIT_FAILURE);
+//    }
+//
+//    pid_t pid = fork();
+//    if( pid == 0 ) {
+//        dup2(pipe_in[READ], STDIN_FILENO); // stdin --> pipe_in[READ]
+//        dup2(pipe_out[WRITE], STDOUT_FILENO); // stdout --> pipe_out[WRITE]
+//        close(pipe_in[WRITE]);
+//        close(pipe_out[READ]);
+//        log(INFO, "socket_forwarding_cmd: executing command");
+//        n = system(cmd);
+//        log(DEBUG, "socket_forwarding_cmd: BACK from executing command");
+//        _exit(n);
+//    } else {
+//        close(pipe_in[READ]);
+//        close(pipe_out[WRITE]);
+//
+//        selector_status ss = SELECTOR_SUCCESS;
+//        ss |= selector_register(key->s,
+//                                pipe_in[WRITE],
+//                                &proxy_handler,
+//                                OP_WRITE,
+//                                key->data);
+//
+//        ss |= selector_register(key->s,
+//                                pipe_out[READ],
+//                                &proxy_handler,
+//                                OP_READ,
+//                                key->data);
+//
+//        selector_fd_set_nio(pipe_in[WRITE]);
+//        selector_fd_set_nio(pipe_out[READ]);
+//    }
+//}
 
 //-----------------------------------------------------------------------------------------------------------------
 //                                               MAIN

@@ -68,7 +68,6 @@ assert_eq(const unsigned type, const int c, const struct parser_event *e) {
     ck_assert_uint_eq(1,    e->n);
     ck_assert_uint_eq(type, e->type);
     ck_assert_uint_eq(c,    e->data[0]);
-
 }
 
 START_TEST (test_basic) {
@@ -112,4 +111,3 @@ main(void) {
     srunner_free(sr);
     return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
-

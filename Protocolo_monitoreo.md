@@ -1,5 +1,7 @@
 `STATS`
 
+`HELP`
+
 `GETCMD`
 
 `SETCMD [cmd]`

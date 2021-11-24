@@ -152,6 +152,7 @@ parse_options(int argc, char **argv, struct opt * opt) {
                 break;
             case 'e':
                 opt->fstderr = optarg;
+                freopen(opt->fstderr,"w",stderr);
                 break;
             case '?':
                 log(FATAL, "Invalid arguments");
@@ -165,8 +166,3 @@ parse_options(int argc, char **argv, struct opt * opt) {
     }
     opt->origin_server = argv[optind];
 }
-
-
-
-
-

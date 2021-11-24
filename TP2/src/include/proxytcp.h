@@ -44,14 +44,6 @@ typedef enum address_type {
 /*                     STRUCTURES                       */
 /* ==================================================== */
 /* ----------- COPY -------- */
-struct copy
-{
-    int *fd;
-    buffer *rb, *wb;
-    fd_interest duplex;
-    struct copy *other;
-
-};
 
 /* --------- ADDRESS  -------- */
 typedef union address {
@@ -79,8 +71,9 @@ struct connection
     struct addrinfo *origin_resolution;
     struct addrinfo *origin_resolution_current;
     struct copy copy_origin;
-    buffer read_buffer, write_buffer;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
+    buffer read_buffer, write_buffer, filter_buffer;
+    uint8_t raw_buff_a[2048], raw_buff_b[2048], raw_buff_c[2048];
+
     struct state_machine stm;
     struct connection * next;
     struct sockaddr_storage       client_addr;
@@ -89,15 +82,12 @@ struct connection
     bool                    was_greeted;
 
     /* External Process */
+
     struct extern_cmd    extern_cmd;
-    int                     w_to_filter_fds[2];
-    int                     r_from_filter_fds[2];
-    bool                    was_retr;
-    bool                    read_all_mail;
-    bool                    has_filtered_mail;
-    bool                    filtered_all_mail;
+
+    int                     infd;
+    int                     outfd;
 };
 
 
-
-#endif //PROTOS_PROXYTCP_H
+#endif
