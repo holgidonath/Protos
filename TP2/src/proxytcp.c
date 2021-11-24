@@ -89,7 +89,7 @@ bool greeted = true;
 char * get_stats(void)
 {
     char * to_ret = malloc(100); //TODO: free este string
-    sprintf(to_ret, "+Total connections: %lu\nConcurrent connections: %lu\nTotal bytes transferred: %lu\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
+    sprintf(to_ret, "+Total connections: %u\nConcurrent connections: %u\nTotal bytes transferred: %u\n", metrics->total_connections, metrics->concurrent_connections, metrics->bytes_transfered);
     return to_ret;
 }
 bool
@@ -136,7 +136,7 @@ readin_writeout();
 static int
 read_from_filter(struct selector_key *key);
 
-        int parse_command(char * ptr);
+int parse_command(char * ptr);
 void parse_response(char * command);
 bool parse_greeting(char * command, struct selector_key *key);
 char * parse_user(char * ptr);
@@ -754,7 +754,7 @@ get_copy_ptr(struct selector_key *key) {
         ptr =  &conn->copy_filter;
     }
     if(ptr == NULL) {
-        log(ERROR, "get_copy_ptr: NULL pointer return for fd=%s", key->fd);
+        log(ERROR, "get_copy_ptr: NULL pointer return for fd=%i", key->fd);
     }
     return ptr;
 }
@@ -875,7 +875,7 @@ int
 send_to_origin(size_t command, uint8_t *ptr, struct selector_key *key, struct copy* d)
 {
     int n;
-    log(INFO, "command:%d",command);
+    log(INFO, "command:%ld",command);
     n = send(key->fd, ptr, command, MSG_NOSIGNAL);
     has_written = true;
     copy_compute_interests_origin(key->s, d);
@@ -989,7 +989,7 @@ copy_w(struct selector_key *key)
     {
         log(DEBUG, "WRITING TO ORIGIN");
 
-           command = parse_command(ptr);
+           command = parse_command((char *) ptr);
            log(INFO, "command:%d", command);
            has_written = true;
            n = send_to_origin(command,ptr, key, d);
@@ -1658,7 +1658,7 @@ filter_init (struct selector_key * key, char *cmd) {
         env_var_init("DUMMY"); // TODO add username
 
         // executing command
-        system(cmd);
+        execl() // TODO add arguments;
         // read all stdin and write it stdout
         readin_writeout();
 
