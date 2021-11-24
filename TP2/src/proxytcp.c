@@ -1801,6 +1801,9 @@ main(const int argc, char **argv) {
     int proxy_fd, proxy6_fd;
     int admin_fd, admin6_fd;
 
+    proxy_fd = proxy6_fd = -1;
+    admin_fd = admin6_fd = -1;
+
     int ip_version = opt.pop3_addr != NULL ? ipversion_check(opt.pop3_addr) : NULL;
     if(ip_version == AF_INET) {
         proxy_fd = create_socketv4(addr, opt);
@@ -1844,6 +1847,14 @@ main(const int argc, char **argv) {
         err_msg = "getting admin socket flags";
         goto finally;
     }
+    if(selector_fd_set_nio(proxy6_fd) == -1) {
+        err_msg = "getting server socket flags";
+        goto finally;
+    }
+    if(selector_fd_set_nio(admin6_fd) == -1) {
+        err_msg = "getting admin socket flags";
+        goto finally;
+    }
     const struct selector_init conf = {
         .signal = SIGALRM,
         .select_timeout = {
@@ -1879,11 +1890,29 @@ main(const int argc, char **argv) {
         err_msg = "registering fd";
         goto finally;
     }
+
+    if(proxy6_fd != -1) {
+        ss = selector_register(selector, proxy6_fd, &passive_accept_handler,
+                               OP_READ, NULL);
+        if(ss != SELECTOR_SUCCESS) {
+            err_msg = "registering fd";
+            goto finally;
+        }
+    }
     ss = selector_register(selector, admin_fd, &passive_admin_handler,
                                               OP_READ, NULL);
     if(ss != SELECTOR_SUCCESS) {
         err_msg = "registering admin_fd";
         goto finally;
+    }
+
+    if(admin6_fd != -1) {
+        ss = selector_register(selector, admin6_fd, &passive_admin_handler,
+                               OP_READ, NULL);
+        if(ss != SELECTOR_SUCCESS) {
+            err_msg = "registering admin_fd";
+            goto finally;
+        }
     }
     for(;!done;) {
         err_msg = NULL;
@@ -1922,6 +1951,12 @@ finally:
     }
     if(admin_fd >= 0) {
         close(admin_fd);
+    }
+    if(proxy6_fd >= 0) {
+        close(proxy6_fd);
+    }
+    if(admin6_fd >= 0) {
+        close(admin6_fd);
     }
     return ret;
 }
