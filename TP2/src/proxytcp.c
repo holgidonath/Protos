@@ -1064,7 +1064,7 @@ copy_w(struct selector_key *key)
             capa_found = false;
             n = send_to_client(ptr,size,key,d);
         }
-        else if(retr_found)
+        else if(opt.cmd != NULL && retr_found)
         {
             log(DEBUG, "WRITING TO filter");
             filter(key);
@@ -1078,7 +1078,7 @@ copy_w(struct selector_key *key)
             ret =  COPY;
 
         }
-        else if(filter_active == true)
+        else if(opt.cmd != NULL && filter_active == true)
         {
             b = &conn->filter_buffer;
             ptr = buffer_write_ptr(b, &size);
