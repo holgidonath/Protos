@@ -112,7 +112,7 @@ struct connection
     bool                    was_greeted;
 
     /* External Process */
-    struct filter_data      data_filter;
+    struct data_filter      data_filter;
 
 };
 

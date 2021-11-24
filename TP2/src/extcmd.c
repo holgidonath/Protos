@@ -12,11 +12,13 @@
 /* ==================================================== */
 
 int
-read_ext_cmd(struct selector_key *key, buffer* buff);
+read_from_filter(struct selector_key *key);
 
 void
 env_var_init(char *username);
 
+static void
+filter_destroy(struct selector_key *key);
 /* ==================================================== */
 /*                   IMPLEMENTATION                     */
 /* ==================================================== */
@@ -41,27 +43,43 @@ env_var_init(char *username) {
         log(ERROR, "putenv() couldn't create %s environment variable", username);
     }
 }
-int fd,
-copyStruct * copy,
-uint8_t * ptr,
-size_t size,
-bufferADT buffer,
-proxyPopv3 * proxy, MultiplexorKey key) {
+
 int
-read_from_filter(struct selector_key *key, buffer* buff) {
+read_from_filter(struct selector_key *key) {
     log(INFO, "read_from_filter: Reading from filter...");
-    struct connection  * conn = ATTACHMENT(key);
-    struct copy * copy  = copyPtr(key);
-
     unsigned ret = COPY;
+    int fd = key->fd;
+    struct connection  * conn = ATTACHMENT(key);
+    struct copy * copy  = get_copy_ptr(key);
+    struct opt * opt = get_opt();
     size_t size;
-    bufferADT buffer = copy->readBuffer;
-    uint8_t *ptr = getWritePtr(buffer, &size);
+    buffer * buffer = copy->read_buffer;
+    uint8_t *ptr = buffer_write_ptr(buffer, &size);
 
+    bool interest_retr = opt->cmd ? true : false;
+    log(DEBUG, "read_from_filter: opt->cmd exist: %s", opt->cmd);
 
-    return bytes_read;
+    ssize_t n = read(fd, ptr, size);
+    if( n > 0 ) {
+        // TODO update metrics
+        buffer_write_adv(b, n)
+        log(INFO, "read_from_filter: Coppied %zd bytes from filter to proxy", n);
+
+    } else if( n == 0 ) {
+        log(DEBUG, "read_from_filter: Filter EOF.");
+        filter_destroy(key);
+        // TODO aca que onda?
+        if(!buffer_can_read(buffer) && !buffer_can_write(conn->write_buffer)) {
+            copy->duplex = OP_NOOP;
+        }
+
+    } else {
+        log(FATAL, "read_from_filter: Filter broken >,<");
+        conn->data_filter.state = FILTER_ENDING;
+    }
+
+    return ret;
 }
-
 
 int
 write_buffer_to_filter(struct selector_key *key, buffer* buff) {
@@ -91,4 +109,34 @@ write_buffer_to_filter(struct selector_key *key, buffer* buff) {
     buffer_reset(sb);
 
     return n;
+}
+
+static void
+filter_destroy(struct selector_key *key) {
+    struct connnection *  conn    = ATTACHMENT(key);
+    struct data_filter * data_filter   = &conn->data_filter;
+
+    if(data_filter->pid_child > 0) {
+        log(INFO, "filter_destroy: Destroying process %ld", (long)data_filter->pid_child);
+        kill(data_filter->pid_child, SIGKILL);
+    }
+    else if(data_filter->pid_child == -1) {
+        log(ERROR, "filter_destroy: Process PID = %ld returned", (long)data_filter->pid_child);
+        exit(EXIT_FAILURE);
+    }
+
+    for(int i = 0; i < 2; i++) {
+        if(data_filter->fdin[i] > 0) {
+            selector_unregister_fd(key->s, data_filter->fdin[i]);
+            close(data_filter->fdin[i]);
+        }
+        if(filter_data->fdout[i] > 0) {
+            selector_unregister_fd(key->s, data_filter->fdout[i]);
+            close(data_filter->fdout[i]);
+        }
+    }
+    memset(data_filter, 0, sizeof(struct data_filter));
+
+    data_filter->state = FILTER_CLOSE;
+    log(DEBUG, "filter_destroy: FILTER_CLOSE");
 }
